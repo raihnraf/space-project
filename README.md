@@ -27,7 +27,7 @@ Grafana (real-time dashboards)
 
 ### Prerequisites
 
-- Docker and Docker Compose
+- Docker (with Compose plugin)
 - At least 10GB free disk space
 - Ports 3000, 5432, 8080 available
 
@@ -35,10 +35,10 @@ Grafana (real-time dashboards)
 
 ```bash
 # Start TimescaleDB and Grafana
-docker-compose up -d timescaledb grafana
+docker compose up -d timescaledb grafana
 
 # Wait for database to initialize (check logs)
-docker-compose logs -f timescaledb
+docker compose logs -f timescaledb
 # Look for: "database system is ready to accept connections"
 ```
 
@@ -46,7 +46,7 @@ docker-compose logs -f timescaledb
 
 ```bash
 # Start the Go service
-docker-compose up -d go-service
+docker compose up -d go-service
 
 # Verify it's running
 curl http://localhost:8080/health
@@ -72,7 +72,7 @@ curl -X POST http://localhost:8080/telemetry \
 
 ```bash
 # Option A: Run in Docker
-docker-compose --profile testing up simulator
+docker compose --profile testing up simulator
 
 # Option B: Run directly (requires Python 3.11+)
 cd python-simulator
@@ -164,19 +164,19 @@ On a typical development machine:
 
 1. Check if TimescaleDB is ready:
    ```bash
-   docker-compose logs timescaledb
+   docker compose logs timescaledb
    ```
 
 2. Verify database connection:
    ```bash
-   docker-compose exec go-service ping timescaledb
+   docker compose exec go-service ping timescaledb
    ```
 
 ## Project Structure
 
 ```
 space-project/
-├── docker-compose.yml          # Container orchestration
+├── docker compose.yml          # Container orchestration
 ├── README.md                   # This file
 │
 ├── go-service/                 # Go ingestion service

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(go mod init:*)",
+      "Bash(go get:*)",
+      "Bash(go mod tidy:*)",
+      "Bash(docker:*)",
+      "Bash(docker-compose:*)",
+      "Bash(curl:*)"
+    ]
+  }
+}

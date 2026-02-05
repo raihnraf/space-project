@@ -82,7 +82,7 @@ func main() {
 func setupRouter(batchProcessor *db.BatchProcessor) *gin.Engine {
 	router := gin.Default()
 
-	telemetryHandler := handlers.NewTelemetryHandler(batchProcessor)
+	telemetryHandler := handlers.NewTelemetryHandlerWithDB(batchProcessor)
 
 	// Health check
 	router.GET("/health", telemetryHandler.HealthCheck)

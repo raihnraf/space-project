@@ -9,11 +9,24 @@ import (
 	"orbitstream/models"
 )
 
-type TelemetryHandler struct {
-	batchProcessor *db.BatchProcessor
+// BatchProcessorInterface defines the interface for batch processing
+// This allows for mocking in tests
+type BatchProcessorInterface interface {
+	Add(point models.TelemetryPoint)
 }
 
-func NewTelemetryHandler(bp *db.BatchProcessor) *TelemetryHandler {
+type TelemetryHandler struct {
+	batchProcessor BatchProcessorInterface
+}
+
+func NewTelemetryHandler(bp BatchProcessorInterface) *TelemetryHandler {
+	return &TelemetryHandler{
+		batchProcessor: bp,
+	}
+}
+
+// NewTelemetryHandlerWithDB creates a handler with the real database batch processor
+func NewTelemetryHandlerWithDB(bp *db.BatchProcessor) *TelemetryHandler {
 	return &TelemetryHandler{
 		batchProcessor: bp,
 	}

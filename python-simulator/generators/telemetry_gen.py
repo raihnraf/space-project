@@ -68,6 +68,9 @@ class TelemetryGenerator:
         # Simulate occasional battery charging (when in sunlight)
         if self.battery < 30 and random.random() < 0.05:  # 5% chance when < 30%
             self.battery += np.random.uniform(5, 15)  # Charge 5-15%
+        
+        # Re-clamp battery after charging to ensure it stays within bounds
+        self.battery = max(0, min(100, self.battery))
 
         return {
             "battery": round(self.battery, 2),
@@ -85,27 +88,32 @@ class TelemetryGenerator:
             "sudden_discharge"
         ])
 
+        battery, storage, signal = 0, 0, 0
+
         if anomaly_type == "battery_critical":
-            return {
-                "battery": round(random.uniform(0, 10), 2),  # Critically low
-                "storage": round(self.storage + random.uniform(0, 100), 2),
-                "signal": round(self.signal + random.uniform(-5, 5), 2)
-            }
+            battery = random.uniform(0, 10)  # Critically low
+            storage = self.storage + random.uniform(0, 100)
+            signal = self.signal + random.uniform(-5, 5)
         elif anomaly_type == "storage_full":
-            return {
-                "battery": round(self.battery + random.uniform(-2, 2), 2),
-                "storage": round(random.uniform(95000, 100000), 2),  # Near capacity
-                "signal": round(self.signal + random.uniform(-5, 5), 2)
-            }
+            battery = self.battery + random.uniform(-2, 2)
+            storage = random.uniform(95000, 100000)  # Near capacity
+            signal = self.signal + random.uniform(-5, 5)
         elif anomaly_type == "signal_loss":
-            return {
-                "battery": round(self.battery + random.uniform(-2, 2), 2),
-                "storage": round(self.storage + random.uniform(0, 100), 2),
-                "signal": round(random.uniform(-120, -110), 2)  # Very weak signal
-            }
+            battery = self.battery + random.uniform(-2, 2)
+            storage = self.storage + random.uniform(0, 100)
+            signal = random.uniform(-120, -110)  # Very weak signal
         else:  # sudden_discharge
-            return {
-                "battery": round(self.battery - random.uniform(20, 40), 2),  # Sudden drop
-                "storage": round(self.storage + random.uniform(0, 100), 2),
-                "signal": round(self.signal + random.uniform(-5, 5), 2)
-            }
+            battery = self.battery - random.uniform(20, 40)  # Sudden drop
+            storage = self.storage + random.uniform(0, 100)
+            signal = self.signal + random.uniform(-5, 5)
+
+        # Clamp all values to valid ranges
+        battery = max(0, min(100, battery))
+        storage = max(0, storage)
+        signal = max(-120, min(-30, signal))
+
+        return {
+            "battery": round(battery, 2),
+            "storage": round(storage, 2),
+            "signal": round(signal, 2)
+        }

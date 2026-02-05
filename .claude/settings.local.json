@@ -7,7 +7,16 @@
       "Bash(go mod tidy:*)",
       "Bash(docker:*)",
       "Bash(docker-compose:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "Bash(tree:*)",
+      "Bash(go test:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(pip3 install:*)",
+      "Bash(python3:*)",
+      "Bash(apt:*)",
+      "Bash(apt-get update:*)",
+      "Bash(apt-get install:*)"
     ]
   }
 }

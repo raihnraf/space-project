@@ -27,9 +27,15 @@ Grafana (real-time dashboards)
 
 ### Prerequisites
 
+**For Docker deployment:**
 - Docker (with Compose plugin)
 - At least 10GB free disk space
 - Ports 3000, 5432, 8080 available
+
+**For local development:**
+- Go 1.21+ (for Go service)
+- Python 3.10+ (for Python simulator)
+- pip and virtualenv (for Python dependencies)
 
 ### 1. Start Infrastructure
 
@@ -74,10 +80,11 @@ curl -X POST http://localhost:8080/telemetry \
 # Option A: Run in Docker
 docker compose --profile testing up simulator
 
-# Option B: Run directly (requires Python 3.11+)
+# Option B: Run directly (requires Python 3.10+)
 cd python-simulator
 pip install -r requirements.txt
-python satellite_sim.py --satellites 100 --rate 100 --duration 60
+python -m satellite_sim --satellites 100 --rate 100 --duration 60
+# Or: PYTHONPATH=$(pwd) python satellite_sim.py --satellites 100 --rate 100 --duration 60
 ```
 
 ### 5. View Grafana Dashboard
@@ -98,6 +105,14 @@ GROUP BY bucket
 ORDER BY bucket DESC;
 ```
 
+## API Endpoints
+
+| Endpoint | Method | Description | Request Body |
+|----------|--------|-------------|--------------|
+| `/health` | GET | Health check | - |
+| `/telemetry` | POST | Send single telemetry point | `{"satellite_id": "...", "battery_charge_percent": 85.5, ...}` |
+| `/telemetry/batch` | POST | Send batch of telemetry points | Array of telemetry points |
+
 ## Configuration
 
 ### Environment Variables (Go Service)
@@ -105,7 +120,7 @@ ORDER BY bucket DESC;
 | Variable | Default | Description |
 |----------|---------|-------------|
 | PORT | 8080 | HTTP server port |
-| DATABASE_URL | postgres://... | TimescaleDB connection |
+| DATABASE_URL | `postgres://postgres:postgres@timescaledb:5432/orbitstream?sslmode=disable` | TimescaleDB connection |
 | BATCH_SIZE | 1000 | Points per batch |
 | BATCH_TIMEOUT | 1s | Max time before flush |
 | MAX_CONNECTIONS | 50 | Database connection pool |
@@ -172,30 +187,116 @@ On a typical development machine:
    docker compose exec go-service ping timescaledb
    ```
 
+## Testing
+
+### Go Service Tests
+
+The Go service has comprehensive unit tests for all major components:
+
+```bash
+cd go-service
+
+# Run all tests
+go test ./... -v
+
+# Run with coverage
+go test ./... -cover
+
+# Run specific package tests
+go test ./config -v
+go test ./handlers -v
+go test ./db -v
+go test ./models -v
+```
+
+**Test Coverage:**
+- `config/` - Configuration loading and environment variable parsing (100%)
+- `handlers/` - HTTP request handling and responses (95%)
+- `db/` - Anomaly detection logic (batch processing requires DB)
+- `models/` - Data model validation
+
+### Python Simulator Tests
+
+The Python simulator has unit tests for the telemetry generator and simulator:
+
+```bash
+cd python-simulator
+
+# Install test dependencies
+pip install -r requirements.txt
+
+# Run all tests (PYTHONPATH is required for imports)
+PYTHONPATH=$(pwd) pytest -v
+
+# Run with coverage
+PYTHONPATH=$(pwd) pytest --cov=. --cov-report=html
+
+# Run specific test file
+PYTHONPATH=$(pwd) pytest tests/test_telemetry_gen.py -v
+```
+
+**Note:** The `PYTHONPATH` environment variable is required so Python can find the `generators` and `config` modules when running tests.
+
+**Test Coverage:**
+- `tests/test_telemetry_gen.py` - Data generation, anomaly injection, value validation
+- `tests/test_satellite_sim.py` - Satellite initialization, statistics tracking
+- `tests/test_config.py` - Configuration dataclass
+
+### Test Files
+
+| Go Tests | Description |
+|----------|-------------|
+| `config/config_test.go` | Environment variable parsing, defaults, validation |
+| `handlers/telemetry_test.go` | HTTP endpoints, JSON binding, error handling |
+| `db/batch_test.go` | Anomaly detection thresholds |
+| `models/telemetry_test.go` | JSON serialization, model validation |
+
+| Python Tests | Description |
+|---------------|-------------|
+| `tests/test_telemetry_gen.py` | Generator behavior, anomaly distribution, bounds checking |
+| `tests/test_satellite_sim.py` | Swarm initialization, statistics, ID formatting |
+| `tests/test_config.py` | Dataclass validation |
+
 ## Project Structure
 
 ```
 space-project/
-├── docker compose.yml          # Container orchestration
+├── docker-compose.yml          # Container orchestration
 ├── README.md                   # This file
 │
 ├── go-service/                 # Go ingestion service
 │   ├── main.go                 # Entry point
 │   ├── go.mod / go.sum         # Dependencies
 │   ├── handlers/               # HTTP handlers
+│   │   ├── telemetry.go        # Telemetry endpoints
+│   │   └── telemetry_test.go   # Handler tests
 │   ├── models/                 # Data structures
+│   │   ├── telemetry.go        # Telemetry models
+│   │   └── telemetry_test.go   # Model tests
 │   ├── db/                     # Database layer
 │   │   ├── connection.go       # Connection pool
 │   │   ├── batch.go            # Batch processor
+│   │   ├── batch_test.go       # Anomaly detection tests
 │   │   └── init.sql            # Schema
 │   ├── config/                 # Configuration
+│   │   ├── config.go           # Config loading
+│   │   └── config_test.go      # Config tests
+│   ├── test/                   # Test utilities
+│   │   └── setup.go            # Mocks and helpers
 │   └── Dockerfile
 │
 ├── python-simulator/           # Satellite simulator
 │   ├── satellite_sim.py        # Main script
 │   ├── config.py               # Configuration
 │   ├── generators/             # Telemetry data generator
+│   │   └── telemetry_gen.py
 │   ├── requirements.txt        # Python deps
+│   ├── pytest.ini              # Pytest configuration
+│   ├── tests/                  # Test suite
+│   │   ├── conftest.py         # Shared fixtures
+│   │   ├── test_telemetry_gen.py
+│   │   ├── test_satellite_sim.py
+│   │   └── test_config.py
 │   └── Dockerfile
 │
 └── grafana/                    # Grafana configuration

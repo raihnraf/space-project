@@ -18,4 +18,4 @@ COPY . .
 RUN chmod +x satellite_sim.py
 
 # Run the simulator
-CMD ["python", "satellite_sim.py", "--satellites", "100", "--rate", "100"]
+CMD ["sh", "-c", "python satellite_sim.py --satellites 100 --rate 100 --api-url ${API_URL:-http://localhost:8080}"]

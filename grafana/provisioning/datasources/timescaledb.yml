@@ -7,10 +7,13 @@ datasources:
     url: timescaledb:5432
     database: orbitstream
     user: postgres
-    password: postgres
     editable: false
     isDefault: true
     jsonData:
       postgresVersion: 1600
       timescaledb: true
+      database: orbitstream
+      sslmode: disable
+    secureJsonData:
+      password: postgres
     version: 1

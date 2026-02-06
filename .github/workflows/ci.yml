@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test-go:
+    name: Test Go Service
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./go-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: Download dependencies
+        run: go mod download
+
+      - name: Run tests
+        run: go test ./... -v -cover
+
+      - name: Build
+        run: go build -o orbitstream .
+
+  test-python:
+    name: Test Python Simulator
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./python-simulator
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          export PYTHONPATH=$(pwd)
+          pytest -v
+
+  lint-go:
+    name: Lint Go
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24"
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+          working-directory: ./go-service
+          args: --timeout=5m
+
+  lint-python:
+    name: Lint Python
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install linting tools
+        run: |
+          pip install ruff black
+
+      - name: Run Ruff (linting)
+        run: |
+          cd python-simulator
+          ruff check .
+
+      - name: Run Black (formatting check)
+        run: |
+          cd python-simulator
+          black --check .
+
+  docker-build:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Go Service
+        uses: docker/build-push-action@v5
+        with:
+          context: ./go-service
+          push: false
+          tags: orbitstream-go:test
+
+      - name: Build Python Simulator
+        uses: docker/build-push-action@v5
+        with:
+          context: ./python-simulator
+          push: false
+          tags: orbitstream-simulator:test

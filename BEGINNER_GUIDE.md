@@ -128,6 +128,34 @@ This is like:
 - ❌ Going to the store for 1 item, 100 times
 - ✅ Making a shopping list and going once
 
+### 6. Continuous Aggregates (Downsampling)
+
+**Definition:** Pre-calculated summaries of data at different time scales.
+
+Imagine you're watching Netflix:
+- Raw data: Every frame (30 per second) = 108,000 frames/hour
+- Downsampled: 1 summary per hour = just 1 entry!
+
+**Why it matters:**
+```
+Question: "What was the average battery for SAT-0001 last month?"
+
+❌ Without downsampling:
+   → Query 2.6 million raw data points
+   → Takes 30 seconds
+
+✅ With downsampling:
+   → Query 30 daily summaries
+   → Takes 0.1 seconds!
+```
+
+**OrbitStream's Aggregates:**
+| View | Bucket | Kept For | Use Case |
+|------|--------|----------|----------|
+| Raw telemetry | Every point | 7 days | Live monitoring |
+| Hourly stats | 1 hour | 6 months | Weekly analysis |
+| Daily stats | 1 day | 1 year | Long-term trends |
+
 ---
 
 ## Architecture Deep Dive
@@ -228,17 +256,37 @@ CREATE TABLE telemetry (
 );
 ```
 
+**Continuous Aggregates (Auto-Summaries):**
+```sql
+-- Example: Query hourly averages instead of millions of raw rows
+SELECT * FROM satellite_stats_hourly
+WHERE satellite_id = 'SAT-0001'
+  AND bucket > NOW() - INTERVAL '7 days';
+```
+
+**Data Lifecycle:**
+```
+Day 1-7:   Raw data → Live monitoring
+Day 8+:    Raw data DELETED, only aggregates remain
+Month 1-6: Hourly aggregates available
+Year 1:    Daily aggregates available
+```
+
 #### 4. Grafana
 
 **What it does:** Shows pretty charts and graphs.
 
 **Think of it as:** A TV screen in the control room showing satellite status.
 
+**Pre-built Dashboards:**
+- **Downsampling Performance** - Shows raw vs aggregated query speeds
+
 **What you can see:**
 - Real-time throughput (points per second)
 - Battery levels over time
 - Which satellites have problems
 - Total data stored
+- Query performance comparison (raw vs downsampled)
 
 ---
 
@@ -798,7 +846,7 @@ Now that you understand the basics:
 1. **Modify the simulator:** Change how many satellites or how fast they send data
 2. **Add new telemetry fields:** Track temperature, altitude, etc.
 3. **Create new Grafana dashboards:** Visualize different metrics
-4. **Add authentication:** Make the API require API keys
+4. **Query the continuous aggregates:** Try comparing raw vs aggregated query speeds
 5. **Scale up:** Run multiple Go service instances behind a load balancer
 
 ---
@@ -820,10 +868,12 @@ Now that you understand the basics:
 | **PostgreSQL** | Open-source relational database |
 | **Request** | Message sent to a server asking for something |
 | **Response** | Message sent back from a server |
+| **Retention Policy** | Rule for automatically deleting old data |
 | **Telemetry** | Data from remote sensors/devices |
 | **Throughput** | Amount of data processed per second |
 | **Time-series** | Data points ordered in time |
 | **Timestamp** | Date and time when something happened |
+| **Continuous Aggregate** | Pre-computed summary of time-series data |
 
 ---
 

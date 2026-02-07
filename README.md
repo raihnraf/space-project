@@ -22,6 +22,8 @@ Grafana (real-time dashboards)
 - **Anomaly detection** - simple threshold-based alerts
 - **Real-time visualization** - Grafana dashboards with live data
 - **TimescaleDB optimization** - hypertables, compression, and retention policies
+- **Continuous Aggregates** - hierarchical downsampling (5-min, hourly, daily buckets)
+- **Tiered Data Retention** - raw: 7 days, hourly: 6 months, daily: 1 year (~90% storage savings)
 
 ## Quick Start
 
@@ -91,17 +93,27 @@ python -m satellite_sim --satellites 100 --rate 100 --duration 60
 
 1. Open http://localhost:3000
 2. Login: admin / admin
-3. Navigate to Explore → Select TimescaleDB datasource
-4. Run queries like:
+3. Navigate to **Dashboards → OrbitStream** folder
+4. Available dashboards:
+   - **Downsampling Performance** - Compare raw vs aggregated query speeds
+
+Or explore data manually:
+- Navigate to Explore → Select TimescaleDB datasource
+- Run queries like:
 
 ```sql
--- Real-time throughput
+-- Real-time throughput (raw data)
 SELECT
     time_bucket('1 second', time) AS bucket,
     COUNT(*) AS points_per_second
 FROM telemetry
 WHERE time > NOW() - INTERVAL '5 minutes'
 GROUP BY bucket
+ORDER BY bucket DESC;
+
+-- Use continuous aggregates for historical queries (much faster!)
+SELECT * FROM satellite_stats_hourly
+WHERE bucket > NOW() - INTERVAL '24 hours'
 ORDER BY bucket DESC;
 ```
 
@@ -172,8 +184,11 @@ On a typical development machine:
 ### Disk Growing Too Fast
 
 - Verify compression policy is active
-- Check retention policy (30 days default)
-- Reduce chunk time interval
+- Check retention policies:
+  - Raw telemetry: 7 days
+  - Hourly aggregates: 6 months
+  - Daily aggregates: 1 year
+- Use continuous aggregates for historical queries instead of raw data
 
 ### Go Service Won't Start
 
@@ -207,6 +222,7 @@ go test ./config -v
 go test ./handlers -v
 go test ./db -v
 go test ./models -v
+go test ./db/aggregates_test.go -v  # Continuous aggregate tests (requires Docker)
 ```
 
 **Test Coverage:**
@@ -214,6 +230,9 @@ go test ./models -v
 - `handlers/` - HTTP request handling and responses (95%)
 - `db/` - Anomaly detection logic (batch processing requires DB)
 - `models/` - Data model validation
+- `db/aggregates_test.go` - Continuous aggregate tests (schema, functionality, integration)
+- `db/schema_test.go` - Database schema validation
+- `db/integration_test.go` - Full pipeline integration tests
 
 ### Python Simulator Tests
 
@@ -277,7 +296,11 @@ space-project/
 │   │   ├── connection.go       # Connection pool
 │   │   ├── batch.go            # Batch processor
 │   │   ├── batch_test.go       # Anomaly detection tests
-│   │   └── init.sql            # Schema
+│   │   ├── aggregates_test.go  # Continuous aggregate tests
+│   │   ├── schema_test.go      # Schema validation tests
+│   │   ├── integration_test.go # Pipeline integration tests
+│   │   ├── test_helpers.go     # Test utilities
+│   │   └── init.sql            # Schema (hypertables + continuous aggregates)
 │   ├── config/                 # Configuration
 │   │   ├── config.go           # Config loading
 │   │   └── config_test.go      # Config tests
@@ -301,9 +324,38 @@ space-project/
 │
 └── grafana/                    # Grafana configuration
     └── provisioning/
-        └── datasources/
-            └── timescaledb.yml
+        ├── datasources/
+        │   └── timescaledb.yml
+        └── dashboards/
+            ├── dashboards.yml              # Dashboard provisioning config
+            └── downsampling-comparison.json # Performance comparison dashboard
 ```
+
+## Database Architecture
+
+### Continuous Aggregates (Hierarchical Downsampling)
+
+OrbitStream uses TimescaleDB continuous aggregates to provide fast queries at any time scale:
+
+| View | Bucket Size | Retention | Use Case |
+|------|-------------|-----------|----------|
+| `telemetry` (raw) | - | 7 days | Real-time monitoring, debugging |
+| `satellite_stats` | 5 minutes | - | Recent trends |
+| `satellite_stats_hourly` | 1 hour | 6 months | Weekly/monthly analysis |
+| `satellite_stats_daily` | 1 day | 1 year | Long-term trends, capacity planning |
+
+### Aggregate Metrics
+
+Each aggregate view includes:
+- **AVG/MIN/MAX** for battery, storage, and signal
+- **data_points** - count of raw records
+- **anomaly_count** - number of anomalies in the bucket
+
+### Storage Optimization
+
+- **Compression**: 90-95% space savings on all tables
+- **Tiered Retention**: Automatic cleanup of old data
+- **Expected Savings**: ~90%+ reduction in long-term storage costs
 
 ## License
 

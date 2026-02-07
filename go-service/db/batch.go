@@ -110,7 +110,7 @@ func (bp *BatchProcessor) insertBatch(ctx context.Context, batch []models.Teleme
 	if err != nil {
 		return 0, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 
 	stmt := `
 		INSERT INTO telemetry (

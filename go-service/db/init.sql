@@ -36,9 +36,10 @@ SELECT add_compression_policy('telemetry',
     INTERVAL '1 day'
 );
 
--- Add retention policy (keep data for 30 days)
+-- Add retention policy (keep raw data for 7 days only)
+-- Hourly aggregates cover 6 months, daily aggregates cover 1 year
 SELECT add_retention_policy('telemetry',
-    INTERVAL '30 days'
+    INTERVAL '7 days'
 );
 
 -- Create continuous aggregate for real-time stats (TimescaleDB feature)
@@ -65,4 +66,100 @@ SELECT add_continuous_aggregate_policy('satellite_stats',
     start_offset => INTERVAL '30 minutes',
     end_offset => INTERVAL '5 minutes',
     schedule_interval => INTERVAL '5 minutes'
+);
+
+-- =====================================================
+-- HOURLY CONTINUOUS AGGREGATE (for 1-7 day queries)
+-- =====================================================
+CREATE MATERIALIZED VIEW satellite_stats_hourly
+WITH (timescaledb.continuous) AS
+SELECT
+    satellite_id,
+    time_bucket('1 hour', time) AS bucket,
+    AVG(battery_charge_percent) AS avg_battery,
+    MIN(battery_charge_percent) AS min_battery,
+    MAX(battery_charge_percent) AS max_battery,
+    AVG(storage_usage_mb) AS avg_storage,
+    MIN(storage_usage_mb) AS min_storage,
+    MAX(storage_usage_mb) AS max_storage,
+    AVG(signal_strength_dbm) AS avg_signal,
+    MIN(signal_strength_dbm) AS min_signal,
+    MAX(signal_strength_dbm) AS max_signal,
+    COUNT(*) AS data_points,
+    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count
+FROM telemetry
+GROUP BY satellite_id, bucket;
+
+CREATE INDEX idx_satellite_stats_hourly_lookup
+ON satellite_stats_hourly (satellite_id, bucket DESC);
+
+-- Refresh policy: every hour, covering last 48 hours with 1-hour lag
+SELECT add_continuous_aggregate_policy('satellite_stats_hourly',
+    start_offset => INTERVAL '48 hours',
+    end_offset => INTERVAL '1 hour',
+    schedule_interval => INTERVAL '1 hour'
+);
+
+-- Enable compression on hourly aggregate (90%+ space savings)
+ALTER MATERIALIZED VIEW satellite_stats_hourly SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'satellite_id',
+    timescaledb.compress_orderby = 'bucket'
+);
+
+SELECT add_compression_policy('satellite_stats_hourly',
+    INTERVAL '3 days'
+);
+
+-- Retention: keep hourly data for 6 months
+SELECT add_retention_policy('satellite_stats_hourly',
+    INTERVAL '6 months'
+);
+
+-- =====================================================
+-- DAILY CONTINUOUS AGGREGATE (for 7-30 day queries)
+-- =====================================================
+CREATE MATERIALIZED VIEW satellite_stats_daily
+WITH (timescaledb.continuous) AS
+SELECT
+    satellite_id,
+    time_bucket('1 day', time) AS bucket,
+    AVG(battery_charge_percent) AS avg_battery,
+    MIN(battery_charge_percent) AS min_battery,
+    MAX(battery_charge_percent) AS max_battery,
+    AVG(storage_usage_mb) AS avg_storage,
+    MIN(storage_usage_mb) AS min_storage,
+    MAX(storage_usage_mb) AS max_storage,
+    AVG(signal_strength_dbm) AS avg_signal,
+    MIN(signal_strength_dbm) AS min_signal,
+    MAX(signal_strength_dbm) AS max_signal,
+    COUNT(*) AS data_points,
+    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count
+FROM telemetry
+GROUP BY satellite_id, bucket;
+
+CREATE INDEX idx_satellite_stats_daily_lookup
+ON satellite_stats_daily (satellite_id, bucket DESC);
+
+-- Refresh policy: daily, covering last 7 days with 1-day lag
+SELECT add_continuous_aggregate_policy('satellite_stats_daily',
+    start_offset => INTERVAL '7 days',
+    end_offset => INTERVAL '1 day',
+    schedule_interval => INTERVAL '1 day'
+);
+
+-- Enable compression on daily aggregate (95%+ space savings)
+ALTER MATERIALIZED VIEW satellite_stats_daily SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'satellite_id',
+    timescaledb.compress_orderby = 'bucket'
+);
+
+SELECT add_compression_policy('satellite_stats_daily',
+    INTERVAL '1 day'
+);
+
+-- Retention: keep daily data for 1 year
+SELECT add_retention_policy('satellite_stats_daily',
+    INTERVAL '1 year'
 );

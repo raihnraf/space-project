@@ -1,7 +1,6 @@
 """
 Tests for the TelemetryGenerator class
 """
-import pytest
 import random
 from generators.telemetry_gen import TelemetryGenerator
 
@@ -208,7 +207,7 @@ class TestAnomalyGeneration:
         # Set battery to a known value
         gen.battery = 80.0
 
-        found_sudden_discharge = False
+        found_sudden_discharge = False  # noqa: F841 - variable used for documentation
         for _ in range(1000):
             # Capture battery BEFORE this call (it changes after each call)
             battery_before = gen.battery
@@ -217,7 +216,6 @@ class TestAnomalyGeneration:
             # Check if this was a sudden discharge anomaly (battery dropped by ~20-50)
             drop = battery_before - result['battery']
             if 15 <= drop <= 50:
-                found_sudden_discharge = True
                 assert 20 <= drop <= 50, \
                     f"Sudden discharge should drop 20-40, got {drop}"
                 break
@@ -243,12 +241,10 @@ class TestEdgeCases:
         # Force a charging condition by setting battery low
         gen.battery = 25.0
 
-        found_charging = False
         for _ in range(200):
             result = gen.generate_telemetry()
             if result['battery'] > gen.battery:
                 # Battery increased (charging)
-                found_charging = True
                 assert result['battery'] <= 100, \
                     f"Battery exceeded 100 after charging: {result['battery']}"
                 break
@@ -261,11 +257,9 @@ class TestEdgeCases:
         initial_storage = gen.storage
 
         # Generate points - storage should eventually decrease
-        found_cleanup = False
         for _ in range(500):
             result = gen.generate_telemetry()
             if result['storage'] < initial_storage:
-                found_cleanup = True
                 # Check cleanup amount
                 cleanup_amount = initial_storage - result['storage']
                 assert 5000 <= cleanup_amount <= 25000, \

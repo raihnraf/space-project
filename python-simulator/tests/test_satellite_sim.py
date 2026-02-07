@@ -2,8 +2,7 @@
 Tests for the satellite simulator module
 """
 import pytest
-import asyncio
-from unittest.mock import Mock, AsyncMock, patch
+from unittest.mock import Mock, AsyncMock
 from satellite_sim import Satellite, SatelliteSwarm
 from generators.telemetry_gen import TelemetryGenerator
 from config import SimulatorConfig

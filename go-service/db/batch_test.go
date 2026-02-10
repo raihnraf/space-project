@@ -752,3 +752,481 @@ func TestRandFloat64(t *testing.T) {
 		}
 	}
 }
+
+// =============================================================================
+// Feature E: Position Tracking Tests
+// =============================================================================
+
+// TestBatchProcessorWALRecordConversionWithPositionFields tests converting TelemetryPoint with position fields to WALRecord
+func TestBatchProcessorWALRecordConversionWithPositionFields(t *testing.T) {
+	// Create helper function to convert float64 to pointer
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	point := models.TelemetryPoint{
+		SatelliteID:          "SAT-ISS",
+		Timestamp:            time.Date(2024, 2, 10, 15, 30, 0, 0, time.UTC),
+		BatteryChargePercent: 75.5,
+		StorageUsageMB:       42000.0,
+		SignalStrengthDBM:    -60.0,
+		IsAnomaly:            false,
+		Latitude:             toPtr(-33.8688), // Sydney
+		Longitude:            toPtr(151.2093),
+		AltitudeKM:           toPtr(408.5),
+		VelocityKMPH:         toPtr(27576.5),
+	}
+
+	// Convert to WALRecord (as done in flushToWAL)
+	record := WALRecord{
+		Timestamp:            point.Timestamp,
+		SatelliteID:          point.SatelliteID,
+		BatteryChargePercent: point.BatteryChargePercent,
+		StorageUsageMB:       point.StorageUsageMB,
+		SignalStrengthDBM:    point.SignalStrengthDBM,
+		IsAnomaly:            point.IsAnomaly,
+		Latitude:             point.Latitude,
+		Longitude:            point.Longitude,
+		AltitudeKM:           point.AltitudeKM,
+		VelocityKMPH:         point.VelocityKMPH,
+	}
+
+	// Verify all fields match including position fields
+	if record.SatelliteID != point.SatelliteID {
+		t.Error("satellite ID mismatch")
+	}
+	if record.Latitude == nil || *record.Latitude != -33.8688 {
+		t.Errorf("expected latitude -33.8688, got %v", record.Latitude)
+	}
+	if record.Longitude == nil || *record.Longitude != 151.2093 {
+		t.Errorf("expected longitude 151.2093, got %v", record.Longitude)
+	}
+	if record.AltitudeKM == nil || *record.AltitudeKM != 408.5 {
+		t.Errorf("expected altitude_km 408.5, got %v", record.AltitudeKM)
+	}
+	if record.VelocityKMPH == nil || *record.VelocityKMPH != 27576.5 {
+		t.Errorf("expected velocity_kmph 27576.5, got %v", record.VelocityKMPH)
+	}
+}
+
+// TestBatchProcessorFlushToWALWithPositionFields tests flushToWAL includes position data
+func TestBatchProcessorFlushToWALWithPositionFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	walPath := filepath.Join(tmpDir, "test.wal")
+
+	wal, err := NewWAL(walPath)
+	if err != nil {
+		t.Fatalf("failed to create WAL: %v", err)
+	}
+	defer wal.Close()
+
+	bp := &BatchProcessor{
+		wal: wal,
+	}
+
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	batch := []models.TelemetryPoint{
+		{
+			SatelliteID:          "SAT-ISS-001",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 75.5,
+			StorageUsageMB:       42000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(-33.8688),
+			Longitude:            toPtr(151.2093),
+			AltitudeKM:           toPtr(408.5),
+			VelocityKMPH:         toPtr(27576.5),
+		},
+		{
+			SatelliteID:          "SAT-STARLINK-1001",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       38000.0,
+			SignalStrengthDBM:    -55.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(40.7128), // NYC
+			Longitude:            toPtr(-74.0060),
+			AltitudeKM:           toPtr(550.0),
+			VelocityKMPH:         toPtr(27600.0),
+		},
+	}
+
+	err = bp.flushToWAL(batch)
+	if err != nil {
+		t.Fatalf("failed to flush to WAL: %v", err)
+	}
+
+	// Verify records were written
+	records, err := wal.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read WAL records: %v", err)
+	}
+
+	if len(records) != 2 {
+		t.Fatalf("expected 2 WAL records, got %d", len(records))
+	}
+
+	// Verify first record's position fields
+	if records[0].Latitude == nil || *records[0].Latitude != -33.8688 {
+		t.Errorf("first record: expected latitude -33.8688, got %v", records[0].Latitude)
+	}
+	if records[0].VelocityKMPH == nil || *records[0].VelocityKMPH != 27576.5 {
+		t.Errorf("first record: expected velocity_kmph 27576.5, got %v", records[0].VelocityKMPH)
+	}
+
+	// Verify second record's position fields
+	if records[1].Latitude == nil || *records[1].Latitude != 40.7128 {
+		t.Errorf("second record: expected latitude 40.7128, got %v", records[1].Latitude)
+	}
+	if records[1].AltitudeKM == nil || *records[1].AltitudeKM != 550.0 {
+		t.Errorf("second record: expected altitude_km 550.0, got %v", records[1].AltitudeKM)
+	}
+}
+
+// TestBatchProcessorFlushToWALPartialPositionFields tests flushToWAL with partial position fields
+func TestBatchProcessorFlushToWALPartialPositionFields(t *testing.T) {
+	tmpDir := t.TempDir()
+	walPath := filepath.Join(tmpDir, "test.wal")
+
+	wal, err := NewWAL(walPath)
+	if err != nil {
+		t.Fatalf("failed to create WAL: %v", err)
+	}
+	defer wal.Close()
+
+	bp := &BatchProcessor{
+		wal: wal,
+	}
+
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	batch := []models.TelemetryPoint{
+		// Full position fields
+		{
+			SatelliteID:          "SAT-FULL",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(35.6762),
+			Longitude:            toPtr(139.6503),
+			AltitudeKM:           toPtr(408.0),
+			VelocityKMPH:         toPtr(27580.0),
+		},
+		// No position fields (backward compatibility)
+		{
+			SatelliteID:          "SAT-NOPOS",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       45000.0,
+			SignalStrengthDBM:    -55.0,
+			IsAnomaly:            false,
+		},
+		// Partial position fields (only lat/lon)
+		{
+			SatelliteID:          "SAT-PARTIAL",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 75.0,
+			StorageUsageMB:       42000.0,
+			SignalStrengthDBM:    -58.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(-23.5505),
+			Longitude:            toPtr(-46.6333),
+		},
+	}
+
+	err = bp.flushToWAL(batch)
+	if err != nil {
+		t.Fatalf("failed to flush to WAL: %v", err)
+	}
+
+	// Verify records were written correctly
+	records, err := wal.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read WAL records: %v", err)
+	}
+
+	if len(records) != 3 {
+		t.Fatalf("expected 3 WAL records, got %d", len(records))
+	}
+
+	// First record has all position fields
+	if records[0].Latitude == nil || *records[0].Latitude != 35.6762 {
+		t.Error("first record: latitude mismatch")
+	}
+	if records[0].VelocityKMPH == nil || *records[0].VelocityKMPH != 27580.0 {
+		t.Error("first record: velocity mismatch")
+	}
+
+	// Second record has no position fields
+	if records[1].Latitude != nil {
+		t.Error("second record: expected nil latitude")
+	}
+	if records[1].AltitudeKM != nil {
+		t.Error("second record: expected nil altitude")
+	}
+
+	// Third record has partial position fields
+	if records[2].Latitude == nil || *records[2].Latitude != -23.5505 {
+		t.Error("third record: latitude mismatch")
+	}
+	if records[2].AltitudeKM != nil {
+		t.Error("third record: expected nil altitude")
+	}
+}
+
+// TestBatchProcessorAddWithPositionFields tests that Add() handles position fields correctly
+func TestBatchProcessorAddWithPositionFields(t *testing.T) {
+	anomalyConfig := AnomalyConfig{
+		BatteryMinPercent: 10.0,
+		StorageMaxMB:      95000.0,
+		SignalMinDBM:      -100.0,
+	}
+
+	bp := &BatchProcessor{
+		buffer:        make([]models.TelemetryPoint, 0, 100),
+		batchSize:     1000, // High threshold so no auto-flush
+		anomalyConfig: anomalyConfig,
+		maxBufferSize: 10000,
+	}
+
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	// Add point with full position fields
+	pointWithPos := TelemetryPointForTest(85.0, 45000.0, -55.0)
+	pointWithPos.SatelliteID = "SAT-POS-001"
+	pointWithPos.Latitude = toPtr(1.3521)
+	pointWithPos.Longitude = toPtr(103.8198)
+	pointWithPos.AltitudeKM = toPtr(400.0)
+	pointWithPos.VelocityKMPH = toPtr(27500.0)
+
+	if err := bp.Add(pointWithPos); err != nil {
+		t.Fatalf("unexpected error adding point with position: %v", err)
+	}
+
+	if bp.GetBufferSize() != 1 {
+		t.Errorf("expected buffer size 1, got %d", bp.GetBufferSize())
+	}
+
+	// Verify position fields are preserved in buffer
+	if bp.buffer[0].Latitude == nil || *bp.buffer[0].Latitude != 1.3521 {
+		t.Error("latitude not preserved in buffer")
+	}
+	if bp.buffer[0].VelocityKMPH == nil || *bp.buffer[0].VelocityKMPH != 27500.0 {
+		t.Error("velocity not preserved in buffer")
+	}
+
+	// Add point without position fields (backward compatibility)
+	pointNoPos := TelemetryPointForTest(85.0, 45000.0, -55.0)
+	pointNoPos.SatelliteID = "SAT-NOPOS-001"
+
+	if err := bp.Add(pointNoPos); err != nil {
+		t.Fatalf("unexpected error adding point without position: %v", err)
+	}
+
+	if bp.GetBufferSize() != 2 {
+		t.Errorf("expected buffer size 2, got %d", bp.GetBufferSize())
+	}
+
+	// Verify second point has nil position fields
+	if bp.buffer[1].Latitude != nil {
+		t.Error("expected nil latitude for point without position")
+	}
+}
+
+// TestBatchProcessorPositionValueRanges tests realistic position value ranges in batch context
+func TestBatchProcessorPositionValueRanges(t *testing.T) {
+	tmpDir := t.TempDir()
+	walPath := filepath.Join(tmpDir, "test.wal")
+
+	wal, err := NewWAL(walPath)
+	if err != nil {
+		t.Fatalf("failed to create WAL: %v", err)
+	}
+	defer wal.Close()
+
+	bp := &BatchProcessor{
+		wal: wal,
+	}
+
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	// Test various realistic satellite positions
+	batch := []models.TelemetryPoint{
+		{
+			SatelliteID:          "SAT-EQUATORIAL",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(0.0),    // Equator
+			Longitude:            toPtr(0.0),    // Prime meridian
+			AltitudeKM:           toPtr(400.0),  // LEO
+			VelocityKMPH:         toPtr(27500.0),
+		},
+		{
+			SatelliteID:          "SAT-NORTH-POLE",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(90.0),   // North pole
+			Longitude:            toPtr(0.0),
+			AltitudeKM:           toPtr(500.0),
+			VelocityKMPH:         toPtr(27000.0),
+		},
+		{
+			SatelliteID:          "SAT-SOUTH-POLE",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(-90.0),  // South pole
+			Longitude:            toPtr(180.0),  // International date line
+			AltitudeKM:           toPtr(450.0),
+			VelocityKMPH:         toPtr(27800.0),
+		},
+		{
+			SatelliteID:          "SAT-LOW-LEO",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(45.0),
+			Longitude:            toPtr(-122.0),
+			AltitudeKM:           toPtr(300.0),  // Low LEO
+			VelocityKMPH:         toPtr(27300.0),
+		},
+		{
+			SatelliteID:          "SAT-HIGH-LEO",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       40000.0,
+			SignalStrengthDBM:    -60.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(-45.0),
+			Longitude:            toPtr(0.0),
+			AltitudeKM:           toPtr(2000.0), // High LEO
+			VelocityKMPH:         toPtr(26000.0),
+		},
+	}
+
+	err = bp.flushToWAL(batch)
+	if err != nil {
+		t.Fatalf("failed to flush to WAL: %v", err)
+	}
+
+	// Verify all records were written
+	records, err := wal.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read WAL records: %v", err)
+	}
+
+	if len(records) != len(batch) {
+		t.Fatalf("expected %d WAL records, got %d", len(batch), len(records))
+	}
+
+	// Verify specific ranges
+	if records[0].Latitude == nil || *records[0].Latitude != 0.0 {
+		t.Error("equatorial: latitude should be 0.0")
+	}
+	if records[1].Latitude == nil || *records[1].Latitude != 90.0 {
+		t.Error("north pole: latitude should be 90.0")
+	}
+	if records[2].Latitude == nil || *records[2].Latitude != -90.0 {
+		t.Error("south pole: latitude should be -90.0")
+	}
+	if records[3].AltitudeKM == nil || *records[3].AltitudeKM != 300.0 {
+		t.Error("low LEO: altitude should be 300.0")
+	}
+	if records[4].AltitudeKM == nil || *records[4].AltitudeKM != 2000.0 {
+		t.Error("high LEO: altitude should be 2000.0")
+	}
+}
+
+// TestBatchProcessorWALPositionZeroValues tests zero values in position fields during WAL write
+func TestBatchProcessorWALPositionZeroValues(t *testing.T) {
+	tmpDir := t.TempDir()
+	walPath := filepath.Join(tmpDir, "test.wal")
+
+	wal, err := NewWAL(walPath)
+	if err != nil {
+		t.Fatalf("failed to create WAL: %v", err)
+	}
+	defer wal.Close()
+
+	bp := &BatchProcessor{
+		wal: wal,
+	}
+
+	toPtr := func(v float64) *float64 {
+		return &v
+	}
+
+	// Test with explicit zero values (at equator, prime meridian, surface)
+	batch := []models.TelemetryPoint{
+		{
+			SatelliteID:          "SAT-ZERO",
+			Timestamp:            time.Now().UTC(),
+			BatteryChargePercent: 85.0,
+			StorageUsageMB:       45000.0,
+			SignalStrengthDBM:    -55.0,
+			IsAnomaly:            false,
+			Latitude:             toPtr(0.0),
+			Longitude:            toPtr(0.0),
+			AltitudeKM:           toPtr(0.0),
+			VelocityKMPH:         toPtr(0.0),
+		},
+	}
+
+	err = bp.flushToWAL(batch)
+	if err != nil {
+		t.Fatalf("failed to flush to WAL: %v", err)
+	}
+
+	records, err := wal.ReadAll()
+	if err != nil {
+		t.Fatalf("failed to read WAL records: %v", err)
+	}
+
+	if len(records) != 1 {
+		t.Fatalf("expected 1 WAL record, got %d", len(records))
+	}
+
+	// Verify zero values are preserved (not treated as nil)
+	if records[0].Latitude == nil {
+		t.Error("expected latitude 0.0, got nil")
+	} else if *records[0].Latitude != 0.0 {
+		t.Errorf("expected latitude 0.0, got %f", *records[0].Latitude)
+	}
+	if records[0].Longitude == nil {
+		t.Error("expected longitude 0.0, got nil")
+	} else if *records[0].Longitude != 0.0 {
+		t.Errorf("expected longitude 0.0, got %f", *records[0].Longitude)
+	}
+	if records[0].AltitudeKM == nil {
+		t.Error("expected altitude_km 0.0, got nil")
+	} else if *records[0].AltitudeKM != 0.0 {
+		t.Errorf("expected altitude_km 0.0, got %f", *records[0].AltitudeKM)
+	}
+	if records[0].VelocityKMPH == nil {
+		t.Error("expected velocity_kmph 0.0, got nil")
+	} else if *records[0].VelocityKMPH != 0.0 {
+		t.Errorf("expected velocity_kmph 0.0, got %f", *records[0].VelocityKMPH)
+	}
+}

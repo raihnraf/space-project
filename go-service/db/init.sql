@@ -4,6 +4,12 @@
 -- Enable TimescaleDB extension
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
+-- Enable pg_stat_statements for query performance analysis
+CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+
+-- Grant access to monitoring for the default user
+GRANT pg_read_all_stats TO postgres;
+
 -- Main telemetry table
 CREATE TABLE IF NOT EXISTS telemetry (
     time TIMESTAMPTZ NOT NULL,
@@ -12,7 +18,12 @@ CREATE TABLE IF NOT EXISTS telemetry (
     storage_usage_mb DECIMAL(10,2) NOT NULL,
     signal_strength_dbm DECIMAL(6,2) NOT NULL,
     received_at TIMESTAMPTZ DEFAULT NOW(),
-    is_anomaly BOOLEAN DEFAULT FALSE
+    is_anomaly BOOLEAN DEFAULT FALSE,
+    -- Position tracking fields (nullable for backward compatibility)
+    latitude DECIMAL(9,6),
+    longitude DECIMAL(9,6),
+    altitude_km DECIMAL(8,2),
+    velocity_kmph DECIMAL(9,2)
 );
 
 -- Convert to hypertable with 1-hour chunks for optimal performance
@@ -23,6 +34,8 @@ SELECT create_hypertable('telemetry', 'time',
 -- Create indexes for efficient querying
 CREATE INDEX idx_telemetry_satellite_time ON telemetry (satellite_id, time DESC);
 CREATE INDEX idx_telemetry_anomaly ON telemetry (is_anomaly, time DESC) WHERE is_anomaly = TRUE;
+-- Index for position-based queries (e.g., find satellites over a region)
+CREATE INDEX idx_telemetry_position ON telemetry (satellite_id, time DESC) INCLUDE (latitude, longitude, altitude_km);
 
 -- Configure compression settings (90% space savings)
 ALTER TABLE telemetry SET (
@@ -52,7 +65,12 @@ SELECT
     AVG(battery_charge_percent) AS avg_battery,
     AVG(storage_usage_mb) AS avg_storage,
     AVG(signal_strength_dbm) AS avg_signal,
-    COUNT(*) AS data_points
+    COUNT(*) AS data_points,
+    -- Position tracking averages
+    AVG(latitude) AS avg_latitude,
+    AVG(longitude) AS avg_longitude,
+    AVG(altitude_km) AS avg_altitude_km,
+    AVG(velocity_kmph) AS avg_velocity_kmph
 FROM telemetry
 GROUP BY satellite_id, bucket;
 
@@ -86,7 +104,14 @@ SELECT
     MIN(signal_strength_dbm) AS min_signal,
     MAX(signal_strength_dbm) AS max_signal,
     COUNT(*) AS data_points,
-    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count
+    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count,
+    -- Position tracking (with min/max for altitude)
+    AVG(latitude) AS avg_latitude,
+    AVG(longitude) AS avg_longitude,
+    AVG(altitude_km) AS avg_altitude_km,
+    MIN(altitude_km) AS min_altitude_km,
+    MAX(altitude_km) AS max_altitude_km,
+    AVG(velocity_kmph) AS avg_velocity_kmph
 FROM telemetry
 GROUP BY satellite_id, bucket;
 
@@ -134,7 +159,14 @@ SELECT
     MIN(signal_strength_dbm) AS min_signal,
     MAX(signal_strength_dbm) AS max_signal,
     COUNT(*) AS data_points,
-    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count
+    SUM(CASE WHEN is_anomaly THEN 1 ELSE 0 END) AS anomaly_count,
+    -- Position tracking (with min/max for altitude)
+    AVG(latitude) AS avg_latitude,
+    AVG(longitude) AS avg_longitude,
+    AVG(altitude_km) AS avg_altitude_km,
+    MIN(altitude_km) AS min_altitude_km,
+    MAX(altitude_km) AS max_altitude_km,
+    AVG(velocity_kmph) AS avg_velocity_kmph
 FROM telemetry
 GROUP BY satellite_id, bucket;
 
@@ -163,3 +195,21 @@ SELECT add_compression_policy('satellite_stats_daily',
 SELECT add_retention_policy('satellite_stats_daily',
     INTERVAL '1 year'
 );
+
+-- =====================================================
+-- QUERY STATISTICS VIEW (for database monitoring)
+-- =====================================================
+-- Create a convenient view for query statistics monitoring
+CREATE OR REPLACE VIEW query_statistics AS
+SELECT
+    query,
+    calls,
+    total_exec_time,
+    mean_exec_time,
+    max_exec_time,
+    stddev_exec_time,
+    rows,
+    100.0 * shared_blks_hit / NULLIF(shared_blks_hit + shared_blks_read, 0) AS hit_percent
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 100;

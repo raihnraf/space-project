@@ -27,6 +27,11 @@ type WALRecord struct {
 	StorageUsageMB       float64   `json:"storage_usage_mb"`
 	SignalStrengthDBM    float64   `json:"signal_strength_dbm"`
 	IsAnomaly            bool      `json:"is_anomaly"`
+	// Position tracking fields (nullable pointers for backward compatibility)
+	Latitude             *float64  `json:"latitude,omitempty"`
+	Longitude            *float64  `json:"longitude,omitempty"`
+	AltitudeKM           *float64  `json:"altitude_km,omitempty"`
+	VelocityKMPH         *float64  `json:"velocity_kmph,omitempty"`
 }
 
 // NewWAL creates a new WAL instance

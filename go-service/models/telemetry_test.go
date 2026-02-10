@@ -334,3 +334,255 @@ func TestTelemetryResponseJSONRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// ============================================================================
+// Feature E: Position Tracking Tests
+// ============================================================================
+
+func TestTelemetryPointWithPositionFields(t *testing.T) {
+	// Test JSON unmarshal with position fields
+	jsonData := `{
+		"satellite_id": "SAT-0001",
+		"battery_charge_percent": 85.5,
+		"storage_usage_mb": 45000.0,
+		"signal_strength_dbm": -55.0,
+		"timestamp": "2024-01-15T10:30:00Z",
+		"latitude": -6.2088,
+		"longitude": 106.8456,
+		"altitude_km": 420.5,
+		"velocity_kmph": 27543.21
+	}`
+
+	var point TelemetryPoint
+	err := json.Unmarshal([]byte(jsonData), &point)
+
+	if err != nil {
+		t.Fatalf("failed to unmarshal JSON with position fields: %v", err)
+	}
+
+	// Verify basic fields
+	if point.SatelliteID != "SAT-0001" {
+		t.Errorf("expected SatelliteID 'SAT-0001', got '%s'", point.SatelliteID)
+	}
+
+	// Verify position fields
+	if point.Latitude == nil {
+		t.Error("expected Latitude to be set, got nil")
+	} else if *point.Latitude != -6.2088 {
+		t.Errorf("expected Latitude -6.2088, got %f", *point.Latitude)
+	}
+
+	if point.Longitude == nil {
+		t.Error("expected Longitude to be set, got nil")
+	} else if *point.Longitude != 106.8456 {
+		t.Errorf("expected Longitude 106.8456, got %f", *point.Longitude)
+	}
+
+	if point.AltitudeKM == nil {
+		t.Error("expected AltitudeKM to be set, got nil")
+	} else if *point.AltitudeKM != 420.5 {
+		t.Errorf("expected AltitudeKM 420.5, got %f", *point.AltitudeKM)
+	}
+
+	if point.VelocityKMPH == nil {
+		t.Error("expected VelocityKMPH to be set, got nil")
+	} else if *point.VelocityKMPH != 27543.21 {
+		t.Errorf("expected VelocityKMPH 27543.21, got %f", *point.VelocityKMPH)
+	}
+}
+
+func TestTelemetryPointWithoutPositionFields(t *testing.T) {
+	// Test backward compatibility: JSON without position fields
+	jsonData := `{
+		"satellite_id": "SAT-0001",
+		"battery_charge_percent": 85.5,
+		"storage_usage_mb": 45000.0,
+		"signal_strength_dbm": -55.0,
+		"timestamp": "2024-01-15T10:30:00Z"
+	}`
+
+	var point TelemetryPoint
+	err := json.Unmarshal([]byte(jsonData), &point)
+
+	if err != nil {
+		t.Fatalf("failed to unmarshal JSON without position fields: %v", err)
+	}
+
+	// Verify basic fields work
+	if point.SatelliteID != "SAT-0001" {
+		t.Errorf("expected SatelliteID 'SAT-0001', got '%s'", point.SatelliteID)
+	}
+
+	// Verify position fields are nil (backward compatibility)
+	if point.Latitude != nil {
+		t.Errorf("expected Latitude to be nil for backward compatibility, got %v", *point.Latitude)
+	}
+	if point.Longitude != nil {
+		t.Errorf("expected Longitude to be nil for backward compatibility, got %v", *point.Longitude)
+	}
+	if point.AltitudeKM != nil {
+		t.Errorf("expected AltitudeKM to be nil for backward compatibility, got %v", *point.AltitudeKM)
+	}
+	if point.VelocityKMPH != nil {
+		t.Errorf("expected VelocityKMPH to be nil for backward compatibility, got %v", *point.VelocityKMPH)
+	}
+}
+
+func TestTelemetryPointPartialPositionFields(t *testing.T) {
+	// Test with only some position fields (e.g., only latitude and longitude)
+	jsonData := `{
+		"satellite_id": "SAT-0001",
+		"battery_charge_percent": 85.5,
+		"storage_usage_mb": 45000.0,
+		"signal_strength_dbm": -55.0,
+		"latitude": -6.2088,
+		"longitude": 106.8456
+	}`
+
+	var point TelemetryPoint
+	err := json.Unmarshal([]byte(jsonData), &point)
+
+	if err != nil {
+		t.Fatalf("failed to unmarshal JSON with partial position fields: %v", err)
+	}
+
+	// Verify provided position fields are set
+	if point.Latitude == nil || *point.Latitude != -6.2088 {
+		t.Errorf("expected Latitude -6.2088, got %v", point.Latitude)
+	}
+	if point.Longitude == nil || *point.Longitude != 106.8456 {
+		t.Errorf("expected Longitude 106.8456, got %v", point.Longitude)
+	}
+
+	// Verify omitted position fields are nil
+	if point.AltitudeKM != nil {
+		t.Errorf("expected AltitudeKM to be nil when omitted, got %v", *point.AltitudeKM)
+	}
+	if point.VelocityKMPH != nil {
+		t.Errorf("expected VelocityKMPH to be nil when omitted, got %v", *point.VelocityKMPH)
+	}
+}
+
+func TestTelemetryPointPositionFieldsRoundTrip(t *testing.T) {
+	// Test JSON marshal/unmarshal round-trip with position fields
+	lat := -6.2088
+	lon := 106.8456
+	alt := 420.5
+	vel := 27543.21
+
+	point := TelemetryPoint{
+		SatelliteID:          "SAT-0001",
+		BatteryChargePercent: 85.5,
+		StorageUsageMB:       45000.0,
+		SignalStrengthDBM:    -55.0,
+		Timestamp:            time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		IsAnomaly:            false,
+		Latitude:             &lat,
+		Longitude:            &lon,
+		AltitudeKM:           &alt,
+		VelocityKMPH:         &vel,
+	}
+
+	data, err := json.Marshal(point)
+	if err != nil {
+		t.Fatalf("failed to marshal JSON with position fields: %v", err)
+	}
+
+	var unmarshaled TelemetryPoint
+	err = json.Unmarshal(data, &unmarshaled)
+	if err != nil {
+		t.Fatalf("failed to unmarshal marshaled JSON with position fields: %v", err)
+	}
+
+	// Verify all fields round-trip correctly
+	if unmarshaled.SatelliteID != point.SatelliteID {
+		t.Errorf("SatelliteID round-trip failed: expected '%s', got '%s'", point.SatelliteID, unmarshaled.SatelliteID)
+	}
+	if unmarshaled.BatteryChargePercent != point.BatteryChargePercent {
+		t.Errorf("BatteryChargePercent round-trip failed")
+	}
+
+	// Verify position fields
+	if unmarshaled.Latitude == nil || *unmarshaled.Latitude != lat {
+		t.Errorf("Latitude round-trip failed: expected %f, got %v", lat, unmarshaled.Latitude)
+	}
+	if unmarshaled.Longitude == nil || *unmarshaled.Longitude != lon {
+		t.Errorf("Longitude round-trip failed: expected %f, got %v", lon, unmarshaled.Longitude)
+	}
+	if unmarshaled.AltitudeKM == nil || *unmarshaled.AltitudeKM != alt {
+		t.Errorf("AltitudeKM round-trip failed: expected %f, got %v", alt, unmarshaled.AltitudeKM)
+	}
+	if unmarshaled.VelocityKMPH == nil || *unmarshaled.VelocityKMPH != vel {
+		t.Errorf("VelocityKMPH round-trip failed: expected %f, got %v", vel, unmarshaled.VelocityKMPH)
+	}
+}
+
+func TestTelemetryPointPositionValueRanges(t *testing.T) {
+	// Test that position values are within expected ranges for LEO satellites
+	lat := -6.2088   // Valid: -90 to 90
+	lon := 106.8456  // Valid: -180 to 180
+	alt := 420.5     // Valid: 300-2000 km for LEO
+	vel := 27543.21  // Valid: ~27000 km/h for orbital velocity
+
+	point := TelemetryPoint{
+		SatelliteID:          "SAT-0001",
+		BatteryChargePercent: 85.5,
+		StorageUsageMB:       45000.0,
+		SignalStrengthDBM:    -55.0,
+		Latitude:             &lat,
+		Longitude:            &lon,
+		AltitudeKM:           &alt,
+		VelocityKMPH:         &vel,
+	}
+
+	// Verify position value ranges
+	if point.Latitude != nil && (*point.Latitude < -90 || *point.Latitude > 90) {
+		t.Errorf("Latitude out of valid range [-90, 90]: %f", *point.Latitude)
+	}
+	if point.Longitude != nil && (*point.Longitude < -180 || *point.Longitude > 180) {
+		t.Errorf("Longitude out of valid range [-180, 180]: %f", *point.Longitude)
+	}
+	// LEO satellites typically 300-2000 km altitude
+	if point.AltitudeKM != nil && (*point.AltitudeKM < 0 || *point.AltitudeKM > 50000) {
+		t.Errorf("AltitudeKM seems unrealistic: %f", *point.AltitudeKM)
+	}
+	// Orbital velocity typically ~27000 km/h
+	if point.VelocityKMPH != nil && (*point.VelocityKMPH < 0 || *point.VelocityKMPH > 50000) {
+		t.Errorf("VelocityKMPH seems unrealistic: %f", *point.VelocityKMPH)
+	}
+}
+
+func TestTelemetryPointPositionZeroValues(t *testing.T) {
+	// Test zero/null position values are handled correctly
+	jsonData := `{
+		"satellite_id": "SAT-0001",
+		"battery_charge_percent": 85.5,
+		"storage_usage_mb": 45000.0,
+		"signal_strength_dbm": -55.0,
+		"latitude": 0.0,
+		"longitude": 0.0,
+		"altitude_km": 0.0,
+		"velocity_kmph": 0.0
+	}`
+
+	var point TelemetryPoint
+	err := json.Unmarshal([]byte(jsonData), &point)
+
+	if err != nil {
+		t.Fatalf("failed to unmarshal JSON with zero position values: %v", err)
+	}
+
+	// Zero values are valid (e.g., equator, zero altitude reference)
+	if point.Latitude == nil || *point.Latitude != 0.0 {
+		t.Errorf("expected Latitude 0.0, got %v", point.Latitude)
+	}
+	if point.Longitude == nil || *point.Longitude != 0.0 {
+		t.Errorf("expected Longitude 0.0, got %v", point.Longitude)
+	}
+	if point.AltitudeKM == nil || *point.AltitudeKM != 0.0 {
+		t.Errorf("expected AltitudeKM 0.0, got %v", point.AltitudeKM)
+	}
+	if point.VelocityKMPH == nil || *point.VelocityKMPH != 0.0 {
+		t.Errorf("expected VelocityKMPH 0.0, got %v", point.VelocityKMPH)
+	}
+}

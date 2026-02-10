@@ -2,8 +2,11 @@
 Tests for the TelemetryGenerator class
 """
 import random
+from datetime import datetime, timezone
+from unittest.mock import MagicMock, Mock
 
 from generators.telemetry_gen import TelemetryGenerator
+from generators.position_calc import PositionData
 
 
 class TestTelemetryGeneratorInitialization:
@@ -339,7 +342,10 @@ class TestTelemetryValues:
 
         for result in results:
             assert isinstance(result, dict)
-            assert set(result.keys()) == {'battery', 'storage', 'signal'}
+            # Should at least have the basic fields (may also have position fields)
+            assert 'battery' in result
+            assert 'storage' in result
+            assert 'signal' in result
 
     def test_signal_fluctuates(self, telemetry_generator_no_anomalies):
         """Test that signal fluctuates around base value"""
@@ -353,3 +359,289 @@ class TestTelemetryValues:
         avg_signal = sum(signals) / len(signals)
         assert -70 < avg_signal < -30, \
             f"Average signal {avg_signal} not around base -50"
+
+
+# =============================================================================
+# Feature E: Position Tracking Tests
+# =============================================================================
+
+
+class TestTelemetryGeneratorPositionFields:
+    """Tests for position tracking in telemetry generation"""
+
+    def test_telemetry_without_position_calculator(self):
+        """Test telemetry generation without position calculator returns basic fields"""
+        gen = TelemetryGenerator(satellite_name="ISS", position_calculator=None)
+        result = gen.generate_telemetry()
+
+        # Should only have basic fields
+        assert 'battery' in result
+        assert 'storage' in result
+        assert 'signal' in result
+        # Position fields should not be present
+        assert 'latitude' not in result
+        assert 'longitude' not in result
+        assert 'altitude_km' not in result
+        assert 'velocity_kmph' not in result
+
+    def test_telemetry_with_position_calculator(self):
+        """Test telemetry generation with position calculator includes position fields"""
+        # Create mock position calculator
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=40.7128,
+            longitude=-74.0060,
+            altitude_km=408.5,
+            velocity_kmph=27576.5
+        )
+
+        gen = TelemetryGenerator(
+            satellite_name="ISS",
+            position_calculator=mock_calc
+        )
+        result = gen.generate_telemetry()
+
+        # Should have all fields including position
+        assert 'battery' in result
+        assert 'storage' in result
+        assert 'signal' in result
+        assert 'latitude' in result
+        assert 'longitude' in result
+        assert 'altitude_km' in result
+        assert 'velocity_kmph' in result
+
+    def test_position_values_are_correctly_set(self):
+        """Test that position values from calculator are correctly added"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=-33.8688,  # Sydney
+            longitude=151.2093,
+            altitude_km=408.5,
+            velocity_kmph=27576.5
+        )
+
+        gen = TelemetryGenerator(
+            satellite_name="ISS",
+            position_calculator=mock_calc
+        )
+        result = gen.generate_telemetry()
+
+        assert result['latitude'] == -33.8688
+        assert result['longitude'] == 151.2093
+        assert result['altitude_km'] == 408.5
+        assert result['velocity_kmph'] == 27576.5
+
+    def test_position_rounding(self):
+        """Test that position values are rounded correctly"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=40.71284567,  # More than 6 decimals
+            longitude=-74.00601234,
+            altitude_km=408.56789,  # More than 2 decimals
+            velocity_kmph=27576.54321
+        )
+
+        gen = TelemetryGenerator(
+            satellite_name="ISS",
+            position_calculator=mock_calc
+        )
+        result = gen.generate_telemetry()
+
+        # Latitude and longitude should be rounded to 6 decimals
+        assert result['latitude'] == 40.712846
+        assert result['longitude'] == -74.006012
+        # Altitude and velocity should be rounded to 2 decimals
+        assert result['altitude_km'] == 408.57
+        assert result['velocity_kmph'] == 27576.54
+
+    def test_position_calculator_called_with_correct_params(self):
+        """Test that position calculator is called with correct parameters"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=0.0,
+            longitude=0.0,
+            altitude_km=400.0,
+            velocity_kmph=27500.0
+        )
+
+        gen = TelemetryGenerator(
+            satellite_name="STARLINK-1001",
+            position_calculator=mock_calc
+        )
+        gen.generate_telemetry()
+
+        # Verify get_position was called with satellite name
+        mock_calc.get_position.assert_called_once()
+        call_args = mock_calc.get_position.call_args
+        assert call_args[0][0] == "STARLINK-1001"  # First arg is satellite_name
+        # Second arg should be a datetime
+        assert isinstance(call_args[0][1], datetime)
+
+    def test_position_fallback_on_calculator_error(self):
+        """Test that last known position is used when calculator fails"""
+        mock_calc = Mock()
+
+        # First call succeeds
+        mock_calc.get_position.side_effect = [
+            PositionData(
+                latitude=35.6762,
+                longitude=139.6503,
+                altitude_km=408.0,
+                velocity_kmph=27580.0
+            ),
+            # Second call fails with exception
+            Exception("Calculation failed")
+        ]
+
+        gen = TelemetryGenerator(
+            satellite_name="ISS",
+            position_calculator=mock_calc
+        )
+
+        # First generation should use calculator
+        result1 = gen.generate_telemetry()
+        assert result1['latitude'] == 35.6762
+
+        # Second generation should use fallback (last position)
+        result2 = gen.generate_telemetry()
+        assert result2['latitude'] == 35.6762  # Should use last known position
+
+    def test_position_calculator_returns_none(self):
+        """Test behavior when position calculator returns None"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = None
+
+        gen = TelemetryGenerator(
+            satellite_name="UNKNOWN-SAT",
+            position_calculator=mock_calc
+        )
+        result = gen.generate_telemetry()
+
+        # Should only have basic fields when position is None
+        assert 'battery' in result
+        assert 'storage' in result
+        assert 'signal' in result
+        # Position fields should not be present
+        assert 'latitude' not in result
+
+    def test_position_fields_with_anomaly(self):
+        """Test that position fields are included even during anomalies"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=1.3521,
+            longitude=103.8198,
+            altitude_km=400.0,
+            velocity_kmph=27500.0
+        )
+
+        gen = TelemetryGenerator(
+            base_battery=100.0,
+            satellite_name="ISS",
+            position_calculator=mock_calc,
+            anomaly_rate=1.0  # Always generate anomaly
+        )
+        result = gen.generate_telemetry()
+
+        # Should have both anomaly telemetry AND position fields
+        assert 'battery' in result
+        assert 'storage' in result
+        assert 'signal' in result
+        assert 'latitude' in result
+        assert 'longitude' in result
+        assert 'altitude_km' in result
+        assert 'velocity_kmph' in result
+
+    def test_position_value_ranges(self):
+        """Test that position values are within realistic ranges"""
+        mock_calc = Mock()
+
+        # Test various realistic positions
+        test_positions = [
+            # Equatorial
+            PositionData(0.0, 0.0, 400.0, 27500.0),
+            # North pole
+            PositionData(90.0, 0.0, 500.0, 27000.0),
+            # South pole
+            PositionData(-90.0, 180.0, 450.0, 27800.0),
+            # International date line
+            PositionData(45.0, -180.0, 420.0, 27650.0),
+            # Low LEO
+            PositionData(45.0, -122.0, 300.0, 27300.0),
+            # High LEO
+            PositionData(-45.0, 0.0, 2000.0, 26000.0),
+        ]
+
+        for pos in test_positions:
+            mock_calc.get_position.return_value = pos
+
+            gen = TelemetryGenerator(
+                satellite_name="TEST-SAT",
+                position_calculator=mock_calc
+            )
+            result = gen.generate_telemetry()
+
+            # Verify ranges
+            assert -90 <= result['latitude'] <= 90, \
+                f"Latitude {result['latitude']} out of range [-90, 90]"
+            assert -180 <= result['longitude'] <= 180, \
+                f"Longitude {result['longitude']} out of range [-180, 180]"
+            assert 300 <= result['altitude_km'] <= 2000, \
+                f"Altitude {result['altitude_km']} out of LEO range [300, 2000]"
+            assert 26000 <= result['velocity_kmph'] <= 28000, \
+                f"Velocity {result['velocity_kmph']} out of orbital range [26000, 28000]"
+
+    def test_position_without_satellite_name(self):
+        """Test that position is not calculated without satellite name"""
+        mock_calc = Mock()
+        mock_calc.get_position.return_value = PositionData(
+            latitude=0.0,
+            longitude=0.0,
+            altitude_km=400.0,
+            velocity_kmph=27500.0
+        )
+
+        # No satellite name specified
+        gen = TelemetryGenerator(position_calculator=mock_calc)
+        result = gen.generate_telemetry()
+
+        # Should not call get_position without satellite name
+        mock_calc.get_position.assert_not_called()
+
+        # Should only have basic fields
+        assert 'battery' in result
+        assert 'latitude' not in result
+
+    def test_multiple_generators_with_positions(self):
+        """Test multiple generators with different positions"""
+        mock_calc_iss = Mock()
+        mock_calc_iss.get_position.return_value = PositionData(
+            latitude=40.7128,
+            longitude=-74.0060,
+            altitude_km=408.5,
+            velocity_kmph=27576.5
+        )
+
+        mock_calc_starlink = Mock()
+        mock_calc_starlink.get_position.return_value = PositionData(
+            latitude=-33.8688,
+            longitude=151.2093,
+            altitude_km=550.0,
+            velocity_kmph=27600.0
+        )
+
+        gen_iss = TelemetryGenerator(
+            satellite_name="ISS",
+            position_calculator=mock_calc_iss
+        )
+        gen_starlink = TelemetryGenerator(
+            satellite_name="STARLINK-1001",
+            position_calculator=mock_calc_starlink
+        )
+
+        result_iss = gen_iss.generate_telemetry()
+        result_starlink = gen_starlink.generate_telemetry()
+
+        # Positions should be different
+        assert result_iss['latitude'] != result_starlink['latitude']
+        assert result_iss['longitude'] != result_starlink['longitude']
+        assert result_iss['altitude_km'] != result_starlink['altitude_km']

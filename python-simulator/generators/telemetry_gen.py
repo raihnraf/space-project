@@ -1,7 +1,11 @@
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from typing import Optional
 
 import numpy as np
+
+from .position_calc import PositionCalculator, PositionData
 
 
 @dataclass
@@ -12,12 +16,15 @@ class TelemetryGenerator:
     - Storage accumulation
     - Signal fluctuation
     - Occasional anomalies
+    - Real-time orbital position (if position_calculator is provided)
     """
 
     base_battery: float = 100.0  # Starting battery percentage
     base_storage: float = 0.0    # Starting storage in MB
     base_signal: float = -50.0   # Base signal in dBm
     anomaly_rate: float = 0.01   # 1% chance of anomaly
+    satellite_name: Optional[str] = None  # Real satellite name for position calculation
+    position_calculator: Optional[PositionCalculator] = None  # For orbital position calculation
 
     def __post_init__(self):
         # Initialize random walk parameters
@@ -30,18 +37,51 @@ class TelemetryGenerator:
         self.storage_growth_rate = np.random.normal(10.0, 2.0)   # ~10 MB per reading
         self.signal_volatility = np.random.normal(0.5, 0.1)      # Signal fluctuation
 
+        # Track last position for smooth interpolation
+        self.last_position: Optional[PositionData] = None
+
     def generate_telemetry(self) -> dict[str, float]:
-        """Generate a single telemetry point"""
+        """Generate a single telemetry point with position data"""
 
         # Decide if this should be an anomaly
         is_anomaly = random.random() < self.anomaly_rate
 
+        # Get base telemetry data
         if is_anomaly:
-            # Generate anomalous data
-            return self._generate_anomaly()
+            telemetry = self._generate_anomaly()
         else:
-            # Generate normal data with gradual changes
-            return self._generate_normal()
+            telemetry = self._generate_normal()
+
+        # Add position data if calculator is available
+        if self.position_calculator and self.satellite_name:
+            position = self._get_current_position()
+            if position:
+                telemetry["latitude"] = round(position.latitude, 6)
+                telemetry["longitude"] = round(position.longitude, 6)
+                telemetry["altitude_km"] = round(position.altitude_km, 2)
+                telemetry["velocity_kmph"] = round(position.velocity_kmph, 2)
+
+        return telemetry
+
+    def _get_current_position(self) -> Optional[PositionData]:
+        """Get current satellite position based on orbital mechanics"""
+        if not self.position_calculator or not self.satellite_name:
+            return None
+
+        try:
+            timestamp = datetime.now(timezone.utc)
+            position = self.position_calculator.get_position(self.satellite_name, timestamp)
+
+            if position:
+                self.last_position = position
+                return position
+
+            # Fallback to last known position if calculation fails
+            return self.last_position
+
+        except Exception:
+            # Return last known position on error
+            return self.last_position
 
     def _generate_normal(self) -> dict[str, float]:
         """Generate normal telemetry with realistic trends"""

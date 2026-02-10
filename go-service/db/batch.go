@@ -205,6 +205,11 @@ func (bp *BatchProcessor) flushToWAL(batch []models.TelemetryPoint) error {
 			StorageUsageMB:       point.StorageUsageMB,
 			SignalStrengthDBM:    point.SignalStrengthDBM,
 			IsAnomaly:            point.IsAnomaly,
+			// Position tracking fields
+			Latitude:             point.Latitude,
+			Longitude:            point.Longitude,
+			AltitudeKM:           point.AltitudeKM,
+			VelocityKMPH:         point.VelocityKMPH,
 		}
 		if err := bp.wal.Write(walRecord); err != nil {
 			return fmt.Errorf("failed to write to WAL: %w", err)
@@ -232,8 +237,9 @@ func (bp *BatchProcessor) insertBatch(ctx context.Context, batch []models.Teleme
 	stmt := `
 		INSERT INTO telemetry (
 			time, satellite_id, battery_charge_percent,
-			storage_usage_mb, signal_strength_dbm, is_anomaly
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			storage_usage_mb, signal_strength_dbm, is_anomaly,
+			latitude, longitude, altitude_km, velocity_kmph
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	for _, point := range batch {
@@ -244,6 +250,10 @@ func (bp *BatchProcessor) insertBatch(ctx context.Context, batch []models.Teleme
 			point.StorageUsageMB,
 			point.SignalStrengthDBM,
 			point.IsAnomaly,
+			point.Latitude,
+			point.Longitude,
+			point.AltitudeKM,
+			point.VelocityKMPH,
 		)
 		if err != nil {
 			return 0, err

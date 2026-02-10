@@ -9,6 +9,11 @@ type TelemetryPoint struct {
 	SignalStrengthDBM    float64   `json:"signal_strength_dbm" db:"signal_strength_dbm"`
 	Timestamp            time.Time `json:"timestamp,omitempty" db:"time"`
 	IsAnomaly            bool      `json:"is_anomaly,omitempty" db:"is_anomaly"`
+	// Position tracking fields (nullable pointers for backward compatibility)
+	Latitude             *float64  `json:"latitude,omitempty" db:"latitude"`
+	Longitude            *float64  `json:"longitude,omitempty" db:"longitude"`
+	AltitudeKM           *float64  `json:"altitude_km,omitempty" db:"altitude_km"`
+	VelocityKMPH         *float64  `json:"velocity_kmph,omitempty" db:"velocity_kmph"`
 }
 
 type HealthResponse struct {

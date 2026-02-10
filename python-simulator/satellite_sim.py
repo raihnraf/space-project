@@ -10,11 +10,14 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Optional
 
 import aiohttp
 
 from config import SimulatorConfig
 from generators.telemetry_gen import TelemetryGenerator
+from generators.tle_manager import TLEManager
+from generators.position_calc import PositionCalculator
 
 # Configure logging
 logging.basicConfig(
@@ -32,7 +35,7 @@ class Satellite:
 
     async def send_telemetry(self, session: aiohttp.ClientSession,
                             config: SimulatorConfig) -> dict:
-        """Send a single telemetry point"""
+        """Send a single telemetry point with optional position data"""
         telemetry = self.generator.generate_telemetry()
 
         payload = {
@@ -42,6 +45,16 @@ class Satellite:
             "storage_usage_mb": telemetry["storage"],
             "signal_strength_dbm": telemetry["signal"]
         }
+
+        # Add position fields if available
+        if "latitude" in telemetry:
+            payload["latitude"] = telemetry["latitude"]
+        if "longitude" in telemetry:
+            payload["longitude"] = telemetry["longitude"]
+        if "altitude_km" in telemetry:
+            payload["altitude_km"] = telemetry["altitude_km"]
+        if "velocity_kmph" in telemetry:
+            payload["velocity_kmph"] = telemetry["velocity_kmph"]
 
         try:
             async with session.post(
@@ -93,16 +106,49 @@ class SatelliteSwarm:
             "start_time": time.time()
         }
 
-        # Initialize satellites
+        # Initialize TLE manager and position calculator for real satellite positions
+        self.position_calculator: Optional[PositionCalculator] = None
+        try:
+            logger.info("Loading TLE data for satellite positions...")
+            tle_manager = TLEManager()
+            tle_data = tle_manager.load_tle_data()
+            self.position_calculator = PositionCalculator(tle_data)
+            logger.info(f"Position calculator initialized with {len(tle_data)} satellites")
+        except Exception as e:
+            logger.warning(f"Failed to initialize position calculator: {e}")
+            logger.warning("Continuing without position tracking")
+
+        # Get real satellite names
+        satellite_names = self._get_satellite_names(config.num_satellites)
+
+        # Initialize satellites with real orbital data
         for i in range(config.num_satellites):
             sat_id = f"SAT-{i+1:04d}"
+            sat_name = satellite_names[i] if i < len(satellite_names) else None
+
             generator = TelemetryGenerator(
                 base_battery=100.0,
                 base_storage=0.0,
                 base_signal=-50.0,
-                anomaly_rate=config.anomaly_rate
+                anomaly_rate=config.anomaly_rate,
+                satellite_name=sat_name,
+                position_calculator=self.position_calculator
             )
             self.satellites.append(Satellite(sat_id, generator))
+
+        if self.position_calculator:
+            logger.info(f"Initialized {len(self.satellites)} satellites with real orbital positions")
+        else:
+            logger.info(f"Initialized {len(self.satellites)} satellites (no position tracking)")
+
+    def _get_satellite_names(self, count: int) -> list[str]:
+        """Get list of real satellite names for simulation"""
+        if not self.position_calculator:
+            return []
+
+        # Get real satellite names from TLE manager
+        tle_manager = TLEManager()
+        return tle_manager.get_real_satellite_names(count)
 
     async def start(self):
         """Start all satellites"""

@@ -173,8 +173,9 @@ func (hm *HealthMonitor) insertWALRecords(records []WALRecord) error {
 	stmt := `
 		INSERT INTO telemetry (
 			time, satellite_id, battery_charge_percent,
-			storage_usage_mb, signal_strength_dbm, is_anomaly
-		) VALUES ($1, $2, $3, $4, $5, $6)
+			storage_usage_mb, signal_strength_dbm, is_anomaly,
+			latitude, longitude, altitude_km, velocity_kmph
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 	`
 
 	for _, record := range records {
@@ -185,6 +186,10 @@ func (hm *HealthMonitor) insertWALRecords(records []WALRecord) error {
 			record.StorageUsageMB,
 			record.SignalStrengthDBM,
 			record.IsAnomaly,
+			record.Latitude,
+			record.Longitude,
+			record.AltitudeKM,
+			record.VelocityKMPH,
 		)
 		if err != nil {
 			return err

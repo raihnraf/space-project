@@ -297,12 +297,18 @@ class TestAvailableSatellites:
         for name in satellites:
             assert tle_manager.get_satellite_tle(name) is not None
 
-    def test_get_real_satellite_names_more_than_available(self, tle_manager):
+    def test_get_real_satellite_names_more_than_available(self, temp_cache_dir):
         """Test requesting more satellites than available"""
+        tle_manager = TLEManager(cache_dir=temp_cache_dir, cache_expiry_hours=24)
+        
         # Only add ISS to cache
         tle_manager._tle_cache = {
             "ISS": TLEData("ISS", "1 line", "2 line")
         }
+        # Save to cache file so _is_cache_valid returns True
+        tle_manager._save_to_cache()
+        # Clear in-memory cache to simulate fresh load from cache
+        tle_manager._tle_cache = {}
 
         satellites = tle_manager.get_real_satellite_names(count=10)
         # Should cycle through available satellites

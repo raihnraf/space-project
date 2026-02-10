@@ -259,13 +259,11 @@ class TLEManager:
             if self.get_satellite_tle(name):
                 available.append(name)
 
-        # If we don't have enough, cycle through what we do have
-        while len(available) < count:
-            for name in REAL_SATELLITES:
-                if len(available) >= count:
-                    break
-                if self.get_satellite_tle(name) and name not in available:
-                    available.append(name)
+        # If we don't have enough, cycle through available satellites to fill
+        if available:
+            i = 0
+            while len(available) < count:
+                available.append(available[i % len(available)])
 
         return available[:count]
 

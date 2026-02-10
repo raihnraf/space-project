@@ -75,7 +75,7 @@ class TestSatellite:
 class TestSatelliteSwarm:
     """Tests for the SatelliteSwarm class"""
 
-    def test_satellite_swarm_initialization(self, simulator_config):
+    def test_satellite_swarm_initialization(self, simulator_config, mock_tle_and_position):
         """Test that SatelliteSwarm initializes correctly"""
         swarm = SatelliteSwarm(simulator_config)
         assert len(swarm.satellites) == simulator_config.num_satellites
@@ -83,7 +83,7 @@ class TestSatelliteSwarm:
         assert swarm.stats["success"] == 0
         assert swarm.stats["errors"] == 0
 
-    def test_correct_satellite_count(self, simulator_config):
+    def test_correct_satellite_count(self, mock_tle_and_position):
         """Test that the correct number of satellites are created"""
         config = SimulatorConfig(
             num_satellites=50,
@@ -97,7 +97,7 @@ class TestSatelliteSwarm:
         swarm = SatelliteSwarm(config)
         assert len(swarm.satellites) == 50
 
-    def test_satellite_ids_format(self, simulator_config):
+    def test_satellite_ids_format(self, simulator_config, mock_tle_and_position):
         """Test that all satellite IDs follow the SAT-XXXX format"""
         swarm = SatelliteSwarm(simulator_config)
         for satellite in swarm.satellites:
@@ -106,7 +106,7 @@ class TestSatelliteSwarm:
             assert len(satellite.id) == 8
             assert satellite.id[4:].isdigit()
 
-    def test_stats_initialization(self, simulator_config):
+    def test_stats_initialization(self, simulator_config, mock_tle_and_position):
         """Test that statistics are properly initialized"""
         swarm = SatelliteSwarm(simulator_config)
         assert "total_sent" in swarm.stats
@@ -115,7 +115,7 @@ class TestSatelliteSwarm:
         assert "start_time" in swarm.stats
         assert isinstance(swarm.stats["start_time"], float)
 
-    def test_each_satellite_has_unique_generator(self, simulator_config):
+    def test_each_satellite_has_unique_generator(self, simulator_config, mock_tle_and_position):
         """Test that each satellite has its own generator instance"""
         swarm = SatelliteSwarm(simulator_config)
         generators = [sat.generator for sat in swarm.satellites]
@@ -124,7 +124,7 @@ class TestSatelliteSwarm:
         # (even if they have the same config)
         assert len(set(id(g) for g in generators)) == len(generators)
 
-    def test_generators_have_correct_anomaly_rate(self, simulator_config):
+    def test_generators_have_correct_anomaly_rate(self, simulator_config, mock_tle_and_position):
         """Test that generators inherit the anomaly rate from config"""
         swarm = SatelliteSwarm(simulator_config)
         for satellite in swarm.satellites:
@@ -134,14 +134,14 @@ class TestSatelliteSwarm:
 class TestSatelliteSwarmStatistics:
     """Tests for statistics tracking"""
 
-    def test_stats_start_at_zero(self, simulator_config):
+    def test_stats_start_at_zero(self, simulator_config, mock_tle_and_position):
         """Test that all statistics start at zero"""
         swarm = SatelliteSwarm(simulator_config)
         assert swarm.stats["total_sent"] == 0
         assert swarm.stats["success"] == 0
         assert swarm.stats["errors"] == 0
 
-    def test_stats_can_be_updated(self, simulator_config):
+    def test_stats_can_be_updated(self, simulator_config, mock_tle_and_position):
         """Test that statistics can be updated"""
         swarm = SatelliteSwarm(simulator_config)
         swarm.stats["total_sent"] = 100
@@ -156,7 +156,7 @@ class TestSatelliteSwarmStatistics:
 class TestEdgeCases:
     """Tests for edge cases"""
 
-    def test_single_satellite(self):
+    def test_single_satellite(self, mock_tle_and_position):
         """Test with just one satellite"""
         config = SimulatorConfig(
             num_satellites=1,
@@ -171,7 +171,7 @@ class TestEdgeCases:
         assert len(swarm.satellites) == 1
         assert swarm.satellites[0].id == "SAT-0001"
 
-    def test_large_satellite_count(self):
+    def test_large_satellite_count(self, mock_tle_and_position):
         """Test with a large number of satellites"""
         config = SimulatorConfig(
             num_satellites=1000,
@@ -185,7 +185,7 @@ class TestEdgeCases:
         swarm = SatelliteSwarm(config)
         assert len(swarm.satellites) == 1000
 
-    def test_zero_anomaly_rate(self):
+    def test_zero_anomaly_rate(self, mock_tle_and_position):
         """Test with zero anomaly rate"""
         config = SimulatorConfig(
             num_satellites=10,
@@ -200,7 +200,7 @@ class TestEdgeCases:
         for satellite in swarm.satellites:
             assert satellite.generator.anomaly_rate == 0.0
 
-    def test_high_anomaly_rate(self):
+    def test_high_anomaly_rate(self, mock_tle_and_position):
         """Test with 100% anomaly rate"""
         config = SimulatorConfig(
             num_satellites=10,
@@ -215,7 +215,7 @@ class TestEdgeCases:
         for satellite in swarm.satellites:
             assert satellite.generator.anomaly_rate == 1.0
 
-    def test_infinite_duration(self):
+    def test_infinite_duration(self, mock_tle_and_position):
         """Test with zero duration (infinite run)"""
         config = SimulatorConfig(
             num_satellites=10,

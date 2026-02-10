@@ -125,9 +125,11 @@ class PositionCalculator:
             altitude_km = subpoint.elevation.km
 
             # Calculate velocity
-            # Skyfield gives velocity in km/s, convert to km/h
-            velocity_kms = geocentric.velocity().km_per_s
-            velocity_kmph = abs(velocity_kms) * 3600
+            # Skyfield gives velocity as a 3D vector in km/s
+            # We need to compute the magnitude (scalar speed)
+            import numpy as np
+            velocity_kms = geocentric.velocity.km_per_s
+            velocity_kmph = float(np.linalg.norm(velocity_kms)) * 3600.0
 
             # Normalize longitude to -180 to 180 range
             if longitude > 180:
@@ -214,7 +216,8 @@ class PositionCalculator:
             alt, az, distance = topocentric.altaz()
 
             # Check if above minimum elevation
-            return alt.degrees >= min_elevation_deg
+            # Convert numpy bool to Python bool
+            return bool(alt.degrees >= min_elevation_deg)
 
         except Exception as e:
             logger.error(f"Error checking visibility for {satellite_name}: {e}")
@@ -253,17 +256,7 @@ class PositionCalculator:
             return None
 
         try:
-            # The noseg parameter gives mean motion in revolutions per day
-            # Period = 1440 minutes / mean motion
-            mean_motion = satellite.no.km_per_s  # This is not mean motion, need to use proper method
-
-            # Skyfield stores mean motion in the TLE data
-            # We can extract it from the satellite's model
-            # For now, use approximation based on semi-major axis
-            # T = 2*pi * sqrt(a^3 / mu) where mu = 398600.4418 km^3/s^2
-            mu = 398600.4418  # Earth's gravitational parameter
-
-            # Get semi-major axis from TLE line 2
+            # Extract mean motion from TLE line 2 (columns 53-63, 0-indexed: 52:63)
             # Mean motion is in revolutions per day
             tle = self._find_tle(satellite_name)
             if tle is None:
@@ -273,6 +266,7 @@ class PositionCalculator:
             mean_motion_rev_day = float(tle.line2[52:63])
 
             # Convert to period in minutes
+            # Period = 1440 minutes / mean motion (revolutions per day)
             period_minutes = 1440.0 / mean_motion_rev_day
 
             return period_minutes

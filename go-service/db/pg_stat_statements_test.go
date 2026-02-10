@@ -32,7 +32,7 @@ func TestPgStatStatementsExtension(t *testing.T) {
 			WithStartupTimeout(30 * time.Second),
 		Cmd: []string{
 			"postgres",
-			"-c", "shared_preload_libraries=pg_stat_statements",
+			"-c", "shared_preload_libraries=timescaledb,pg_stat_statements",
 			"-c", "pg_stat_statements.track=all",
 			"-c", "pg_stat_statements.max=10000",
 		},
@@ -280,7 +280,7 @@ func TestQueryStatisticsView(t *testing.T) {
 			WithStartupTimeout(30 * time.Second),
 		Cmd: []string{
 			"postgres",
-			"-c", "shared_preload_libraries=pg_stat_statements",
+			"-c", "shared_preload_libraries=timescaledb,pg_stat_statements",
 			"-c", "pg_stat_statements.track=all",
 		},
 	}

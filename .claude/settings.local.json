@@ -16,7 +16,13 @@
       "Bash(python3:*)",
       "Bash(apt:*)",
       "Bash(apt-get update:*)",
-      "Bash(apt-get install:*)"
+      "Bash(apt-get install:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(make test:*)",
+      "Bash(chmod:*)",
+      "Bash(jq:*)"
     ]
   }
 }

@@ -185,7 +185,7 @@ func TestTelemetryPointInvalidJSON(t *testing.T) {
 func TestHealthResponseStructure(t *testing.T) {
 	response := HealthResponse{
 		Status:    "healthy",
-		Timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC),
+		Timestamp: time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC).Format(time.RFC3339),
 	}
 
 	data, err := json.Marshal(response)
@@ -211,7 +211,7 @@ func TestHealthResponseJSON(t *testing.T) {
 	now := time.Now().UTC()
 	response := HealthResponse{
 		Status:    "healthy",
-		Timestamp: now,
+		Timestamp: now.Format(time.RFC3339),
 	}
 
 	data, err := json.Marshal(response)
@@ -228,8 +228,14 @@ func TestHealthResponseJSON(t *testing.T) {
 	if unmarshaled.Status != "healthy" {
 		t.Errorf("expected Status 'healthy', got '%s'", unmarshaled.Status)
 	}
-	if !unmarshaled.Timestamp.Equal(now) {
-		t.Errorf("expected Timestamp %v, got %v", now, unmarshaled.Timestamp)
+	// Parse the timestamp string to verify it's valid
+	parsedTime, err := time.Parse(time.RFC3339, unmarshaled.Timestamp)
+	if err != nil {
+		t.Errorf("failed to parse timestamp: %v", err)
+	}
+	// Verify the parsed time is close to now (within 1 second)
+	if parsedTime.Sub(now) > time.Second || now.Sub(parsedTime) > time.Second {
+		t.Errorf("expected Timestamp close to %v, got %v", now, parsedTime)
 	}
 }
 

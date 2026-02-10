@@ -2,6 +2,7 @@
 Tests for the SimulatorConfig dataclass
 """
 import pytest
+
 from config import SimulatorConfig
 
 

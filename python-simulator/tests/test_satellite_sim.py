@@ -1,11 +1,13 @@
 """
 Tests for the satellite simulator module
 """
+from unittest.mock import AsyncMock, Mock
+
 import pytest
-from unittest.mock import Mock, AsyncMock
-from satellite_sim import Satellite, SatelliteSwarm
-from generators.telemetry_gen import TelemetryGenerator
+
 from config import SimulatorConfig
+from generators.telemetry_gen import TelemetryGenerator
+from satellite_sim import Satellite, SatelliteSwarm
 
 
 class TestSatellite:

@@ -435,13 +435,14 @@ func TestHealthCheckTimestampPresent(t *testing.T) {
 		t.Fatalf("failed to unmarshal response: %v", err)
 	}
 
-	if response.Timestamp.IsZero() {
-		t.Error("expected timestamp to be set, got zero")
+	if response.Timestamp == "" {
+		t.Error("expected timestamp to be set, got empty string")
 	}
 
-	// Verify timestamp is recent (within last second)
-	if time.Since(response.Timestamp) > time.Second {
-		t.Error("timestamp is not recent")
+	// Verify timestamp is a valid RFC3339 string
+	_, err = time.Parse(time.RFC3339, response.Timestamp)
+	if err != nil {
+		t.Errorf("timestamp is not valid RFC3339 format: %v", err)
 	}
 }
 

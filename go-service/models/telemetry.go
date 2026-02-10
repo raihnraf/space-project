@@ -12,8 +12,13 @@ type TelemetryPoint struct {
 }
 
 type HealthResponse struct {
-	Status    string    `json:"status"`
-	Timestamp time.Time `json:"timestamp"`
+	Status         string `json:"status"`
+	Timestamp      string `json:"timestamp"`
+	DatabaseStatus string `json:"database_status,omitempty"`
+	WALSizeBytes   int64  `json:"wal_size_bytes,omitempty"`
+	WALRecordCount int    `json:"wal_record_count,omitempty"`
+	BufferSize     int    `json:"buffer_size,omitempty"`
+	CircuitBreaker string `json:"circuit_breaker,omitempty"`
 }
 
 type TelemetryResponse struct {

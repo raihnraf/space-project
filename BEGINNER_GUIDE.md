@@ -839,6 +839,234 @@ docker compose down -v
 
 ---
 
+## Developer Workflow
+
+### Setting Up Your Development Environment
+
+To prevent CI/CD failures and catch errors early, set up local linting and testing tools.
+
+#### 1. Install Development Tools
+
+**Option A: Use Makefile (Recommended)**
+```bash
+# Install all tools at once
+make install-tools
+```
+
+**Option B: Manual Installation**
+
+**Go tools:**
+```bash
+# Install golangci-lint
+curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+```
+
+**Python tools:**
+```bash
+# Install ruff, black, and pytest
+pip install --upgrade ruff black pytest
+```
+
+**Pre-commit framework (optional):**
+```bash
+pip install pre-commit
+```
+
+---
+
+### Using the Makefile
+
+The project includes a `Makefile` with common development commands:
+
+#### Quick Reference
+
+```bash
+make help          # Show all available commands
+make check         # Run ALL checks (lint + test + build)
+make lint          # Run all linters (Go + Python)
+make test          # Run all tests
+make build         # Build all services
+```
+
+#### Go Commands
+
+```bash
+make lint-go       # Lint Go code with golangci-lint
+make test-go       # Run Go tests (with -short flag)
+make build-go      # Build Go service binary
+```
+
+#### Python Commands
+
+```bash
+make lint-python   # Lint Python code (ruff + black)
+make format-python # Auto-format Python code
+make test-python   # Run pytest
+```
+
+#### Docker Commands
+
+```bash
+make docker-build  # Build Docker images
+make docker-up     # Start all services
+make docker-down   # Stop all services
+```
+
+---
+
+### Pre-commit Workflow (Recommended)
+
+**What are pre-commit hooks?**
+Automatic checks that run **before** you commit code. They catch errors immediately and prevent bad code from reaching GitHub.
+
+#### Setup
+
+```bash
+# 1. Install pre-commit
+pip install pre-commit
+
+# 2. Install the git hooks
+pre-commit install
+
+# 3. (Optional) Run on all files to test
+pre-commit run --all-files
+```
+
+#### What Gets Checked Automatically
+
+When you run `git commit`, pre-commit will:
+- ✅ Format Python code with Black
+- ✅ Lint Python code with Ruff (and auto-fix issues)
+- ✅ Format Go code with `gofmt`
+- ✅ Fix Go imports with `goimports`
+- ✅ Lint Go code with golangci-lint
+- ✅ Trim trailing whitespace
+- ✅ Fix end-of-file issues
+- ✅ Check YAML syntax
+
+**If any check fails, the commit is blocked** until you fix the issues.
+
+#### Skipping Pre-commit (Emergency Only)
+
+```bash
+# Skip hooks for this commit (NOT RECOMMENDED)
+git commit --no-verify -m "emergency fix"
+```
+
+---
+
+### Before Pushing to GitHub
+
+**Always run this before pushing:**
+
+```bash
+make check
+```
+
+This runs the **exact same checks** as GitHub CI/CD:
+1. Lint Go code
+2. Lint Python code  
+3. Run Go tests
+4. Run Python tests
+5. Build Go service
+
+**If `make check` passes locally, CI/CD will pass on GitHub!**
+
+---
+
+### Troubleshooting Common Linting Errors
+
+#### Go: "unused variable"
+
+**Error:**
+```
+db/batch.go:113: unused variable 'x' (unused)
+```
+
+**Fix:** Remove the variable or use it:
+```go
+// Bad
+x := 10
+
+// Good - use blank identifier if you must ignore
+_ = someFunction()
+```
+
+#### Go: "error return value not checked"
+
+**Error:**
+```
+db/test_helpers.go:48: Error return value of `container.Terminate` is not checked (errcheck)
+```
+
+**Fix:** Check the error or explicitly ignore it:
+```go
+// Bad
+container.Terminate(ctx)
+
+// Good - explicitly ignore
+_ = container.Terminate(ctx)
+
+// Better - check error
+if err := container.Terminate(ctx); err != nil {
+    log.Printf("Failed to terminate: %v", err)
+}
+```
+
+#### Python: "unused import"
+
+**Error:**
+```
+F401 `asyncio` imported but unused
+```
+
+**Fix:** Remove the import:
+```python
+# Bad
+import asyncio
+import pytest
+
+# Good
+import pytest
+```
+
+#### Python: "unused variable"
+
+**Error:**
+```
+F841 Local variable `found_charging` is assigned to but never used
+```
+
+**Fix:** Remove the variable or use it:
+```python
+# Bad
+found_charging = False
+if condition:
+    found_charging = True
+
+# Good - remove if not needed
+if condition:
+    # Do something
+    pass
+```
+
+---
+
+### Configuration Files
+
+The project includes these configuration files for linting:
+
+| File | Purpose |
+|------|---------|
+| `.golangci.yml` | Go linting rules (matches CI/CD) |
+| `python-simulator/pyproject.toml` | Python tool config (ruff, black, pytest) |
+| `.pre-commit-config.yaml` | Pre-commit hooks configuration |
+| `Makefile` | Development commands |
+
+**You don't need to edit these files** - they're already configured to match GitHub CI/CD.
+
+---
+
 ## Next Steps
 
 Now that you understand the basics:

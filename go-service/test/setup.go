@@ -1,6 +1,7 @@
 package test
 
 import (
+	"errors"
 	"orbitstream/models"
 	"sync"
 	"time"
@@ -24,11 +25,17 @@ func NewMockBatchProcessor() *MockBatchProcessor {
 }
 
 // Add simulates adding a point to the batch
-func (m *MockBatchProcessor) Add(point models.TelemetryPoint) {
+func (m *MockBatchProcessor) Add(point models.TelemetryPoint) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.addCallCount++
+
+	if m.shouldError {
+		return errors.New("mock buffer full")
+	}
+
 	m.addedPoints = append(m.addedPoints, point)
+	return nil
 }
 
 // GetAddedPoints returns all points that were added

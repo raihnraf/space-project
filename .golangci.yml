@@ -1,0 +1,56 @@
+run:
+  timeout: 5m
+  tests: true
+  build-tags: []
+
+linters:
+  enable:
+    - errcheck      # Check for unchecked errors
+    - unused        # Check for unused constants, variables, functions and types
+    - gosimple      # Simplify code
+    - govet         # Reports suspicious constructs
+    - ineffassign   # Detects ineffectual assignments
+    - staticcheck   # Go static analysis
+    - typecheck     # Type-check Go code
+    - gofmt         # Check code formatting
+    - goimports     # Check import formatting
+    - misspell      # Check for misspelled English words
+    - revive        # Fast, configurable, extensible, flexible linter
+
+linters-settings:
+  errcheck:
+    check-blank: true
+    check-type-assertions: false
+    exclude-functions:
+      # Allow ignoring Close() on defer for read-only operations
+      - (io.Closer).Close
+  
+  unused:
+    check-exported: false
+  
+  revive:
+    rules:
+      - name: unused-parameter
+        disabled: true  # Allow unused parameters in interfaces
+
+issues:
+  exclude-rules:
+    # Exclude some linters from running on tests files
+    - path: _test\.go
+      linters:
+        - errcheck
+        - unused
+    
+    # Ignore "should have comment" warnings in tests
+    - path: _test\.go
+      text: "should have comment"
+      linters:
+        - revive
+
+  max-issues-per-linter: 0
+  max-same-issues: 0
+
+output:
+  format: colored-line-number
+  print-issued-lines: true
+  print-linter-name: true

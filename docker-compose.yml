@@ -80,8 +80,20 @@ services:
       ANOMALY_THRESHOLD_BATTERY: 10.0
       ANOMALY_THRESHOLD_STORAGE: 95000.0
       ANOMALY_THRESHOLD_SIGNAL: -100.0
+      # Write Ahead Log (WAL) Configuration
+      WAL_PATH: /var/lib/orbitstream/wal/data.wal
+      WAL_MAX_SIZE: 104857600
+      # Retry Configuration
+      MAX_RETRIES: 5
+      RETRY_DELAY: 1s
+      # Circuit Breaker Configuration
+      CIRCUIT_BREAKER_THRESHOLD: 3
+      # Buffer Configuration
+      MAX_BUFFER_SIZE: 10000
     ports:
       - "8080:8080"
+    volumes:
+      - wal_data:/var/lib/orbitstream/wal
     networks:
       - orbitstream-network
     depends_on:
@@ -122,4 +134,6 @@ volumes:
   timescaledb_data:
     driver: local
   grafana_data:
+    driver: local
+  wal_data:
     driver: local

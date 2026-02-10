@@ -4,14 +4,14 @@ OrbitStream Satellite Simulator
 Generates high-throughput telemetry data and sends to Go ingestion service
 """
 
-import asyncio
-import aiohttp
-import time
 import argparse
+import asyncio
 import logging
+import time
 from dataclasses import dataclass
-from typing import List
 from datetime import datetime, timezone
+
+import aiohttp
 
 from config import SimulatorConfig
 from generators.telemetry_gen import TelemetryGenerator
@@ -85,7 +85,7 @@ class SatelliteSwarm:
 
     def __init__(self, config: SimulatorConfig):
         self.config = config
-        self.satellites: List[Satellite] = []
+        self.satellites: list[Satellite] = []
         self.stats = {
             "total_sent": 0,
             "success": 0,
@@ -228,7 +228,7 @@ async def main():
             await swarm.start()
     except KeyboardInterrupt:
         logger.info("Received interrupt signal, shutting down...")
-    except asyncio.TimeoutError:
+    except TimeoutError:
         logger.info("Duration elapsed, shutting down...")
     finally:
         config.running = False

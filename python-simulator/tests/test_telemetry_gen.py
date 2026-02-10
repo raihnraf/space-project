@@ -2,6 +2,7 @@
 Tests for the TelemetryGenerator class
 """
 import random
+
 from generators.telemetry_gen import TelemetryGenerator
 
 
@@ -100,7 +101,7 @@ class TestNormalTelemetryGeneration:
         random.seed(123)
         import numpy as np
         np.random.seed(123)
-        
+
         # Track battery levels
         battery_levels = []
         for _ in range(100):
@@ -111,7 +112,7 @@ class TestNormalTelemetryGeneration:
         # The average should decrease (general downward trend)
         first_avg = sum(battery_levels[:10]) / 10
         last_avg = sum(battery_levels[-10:]) / 10
-        
+
         assert last_avg < first_avg, \
             f"Battery should show downward trend: first avg {first_avg}, last avg {last_avg}"
 

@@ -1,7 +1,7 @@
 import random
-import numpy as np
 from dataclasses import dataclass
-from typing import Dict
+
+import numpy as np
 
 
 @dataclass
@@ -30,7 +30,7 @@ class TelemetryGenerator:
         self.storage_growth_rate = np.random.normal(10.0, 2.0)   # ~10 MB per reading
         self.signal_volatility = np.random.normal(0.5, 0.1)      # Signal fluctuation
 
-    def generate_telemetry(self) -> Dict[str, float]:
+    def generate_telemetry(self) -> dict[str, float]:
         """Generate a single telemetry point"""
 
         # Decide if this should be an anomaly
@@ -43,7 +43,7 @@ class TelemetryGenerator:
             # Generate normal data with gradual changes
             return self._generate_normal()
 
-    def _generate_normal(self) -> Dict[str, float]:
+    def _generate_normal(self) -> dict[str, float]:
         """Generate normal telemetry with realistic trends"""
 
         # Battery: Gradual drain with small fluctuations
@@ -68,7 +68,7 @@ class TelemetryGenerator:
         # Simulate occasional battery charging (when in sunlight)
         if self.battery < 30 and random.random() < 0.05:  # 5% chance when < 30%
             self.battery += np.random.uniform(5, 15)  # Charge 5-15%
-        
+
         # Re-clamp battery after charging to ensure it stays within bounds
         self.battery = max(0, min(100, self.battery))
 
@@ -78,7 +78,7 @@ class TelemetryGenerator:
             "signal": round(self.signal, 2)
         }
 
-    def _generate_anomaly(self) -> Dict[str, float]:
+    def _generate_anomaly(self) -> dict[str, float]:
         """Generate anomalous telemetry"""
 
         anomaly_type = random.choice([

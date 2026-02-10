@@ -2,8 +2,9 @@
 Shared pytest fixtures for satellite simulator tests
 """
 import pytest
-from generators.telemetry_gen import TelemetryGenerator
+
 from config import SimulatorConfig
+from generators.telemetry_gen import TelemetryGenerator
 
 
 @pytest.fixture
